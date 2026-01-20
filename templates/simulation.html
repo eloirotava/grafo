@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    .sim-container { padding: 40px; width: 100%; max-width: 900px; margin: 0 auto; }
+    h2 { font-weight: 300; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 30px; }
+    
+    .panel { background: white; border: 1px solid #ddd; padding: 25px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    
+    .form-group { margin-bottom: 15px; display: flex; align-items: center; }
+    .form-group label { width: 200px; font-size: 14px; font-weight: 600; color: #555; }
+    .form-group input, .form-group select { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 3px; font-family: inherit; }
+    
+    .btn-run { background-color: #27ae60; color: white; border: none; padding: 12px 30px; font-size: 16px; border-radius: 4px; cursor: pointer; float: right; transition: 0.2s; }
+    .btn-run:hover { background-color: #219150; }
+</style>
+
+<div class="sim-container">
+    <h2>Configuração da Simulação</h2>
+
+    <div class="panel">
+        <h3 style="margin-top: 0; font-size: 16px; color: #0078d7;">Propriedades do Fluido</h3>
+        <div class="form-group">
+            <label>Modelo de Fluido</label>
+            <select>
+                <option>Black Oil</option>
+                <option>Composicional</option>
+                <option>Água Simples</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Densidade (kg/m³)</label>
+            <input type="number" value="850">
+        </div>
+        <div class="form-group">
+            <label>Viscosidade (cP)</label>
+            <input type="number" value="1.5">
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3 style="margin-top: 0; font-size: 16px; color: #0078d7;">Parâmetros Numéricos</h3>
+        <div class="form-group">
+            <label>Passo de Tempo (s)</label>
+            <input type="number" value="0.1">
+        </div>
+        <div class="form-group">
+            <label>Máximo de Iterações</label>
+            <input type="number" value="1000">
+        </div>
+        <div class="form-group">
+            <label>Tolerância de Erro</label>
+            <input type="text" value="1e-5">
+        </div>
+    </div>
+
+    <button class="btn-run" onclick="alert('Iniciando solver numérico... (Simulação)')">▶ Rodar Simulação</button>
+</div>
+{% endblock %}

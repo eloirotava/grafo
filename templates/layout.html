@@ -2,80 +2,48 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>{{ title }} - RotavaFlow Simulator</title>
+    <title>{{ title }} - RotavaFlow</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    
-    <script>
-        // Funções padrão (serão substituídas pelo canvas.html quando ele carregar)
-        window.saveLocal = function() { alert("Esta função só funciona na tela do Editor (Canvas)."); }
-        window.saveToPython = function() { alert("Esta função só funciona na tela do Editor (Canvas)."); }
-        window.loadLocal = function() { alert("Esta função só funciona na tela do Editor (Canvas)."); }
-    </script>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
-        
-        .menubar {
-            height: 30px; background-color: #e5e5e5; display: flex; align-items: center;
-            padding: 0 10px; border-bottom: 1px solid #ccc; user-select: none;
-        }
-        .menu-item { padding: 5px 10px; font-size: 13px; color: #333; cursor: pointer; position: relative; }
-        .menu-item:hover { background-color: #d0d0d0; }
-        .menu-item.active { background-color: #f0f0f0; font-weight: bold; border-top: 2px solid #0078d7; margin-top: 1px; z-index: 10; }
-
-        .dropdown {
-            display: none; position: absolute; top: 30px; left: 0;
-            background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-            min-width: 200px; z-index: 1000;
-        }
-        .dropdown div { padding: 8px 15px; cursor: pointer; font-size: 13px; }
-        .dropdown div:hover { background-color: #eee; }
-        .dropdown hr { border: 0; border-top: 1px solid #ddd; margin: 2px 0; }
-
-        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 30px); }
+        .menubar { height: 35px; background-color: #f3f3f3; display: flex; align-items: center; padding: 0 10px; border-bottom: 1px solid #d1d1d1; user-select: none; }
+        .nav-link { text-decoration: none; color: #333; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .nav-link:hover { background-color: #e6e6e6; }
+        .nav-link.active { background-color: #e1e1e1; font-weight: 600; border-bottom: 3px solid #0078d7; color: #000; }
+        .file-menu-btn { padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; cursor: pointer; color: #333; }
+        .file-menu-btn:hover { background-color: #e6e6e6; }
+        .dropdown { display: none; position: absolute; top: 35px; left: 0; background: white; border: 1px solid #ccc; box-shadow: 3px 3px 10px rgba(0,0,0,0.1); min-width: 220px; z-index: 2000; }
+        .dropdown div { padding: 10px 20px; cursor: pointer; font-size: 13px; }
+        .dropdown div:hover { background-color: #f0f0f0; color: #0078d7; }
+        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; }
     </style>
 </head>
 <body>
-
     <div class="menubar">
-        <div class="menu-item" onclick="toggleMenu('file-menu')">
-            Arquivos
+        <div class="file-menu-btn" onclick="document.getElementById('file-menu').style.display = document.getElementById('file-menu').style.display=='block'?'none':'block'">
+            <span>&#9776; Arquivo</span>
             <div id="file-menu" class="dropdown">
-                <div onclick="document.getElementById('file-input').click()">Abrir Local (.json)</div>
-                <div onclick="saveLocal()">Salvar Local (.json)</div>
-                <hr>
-                <div onclick="saveToPython()">Salvar no Servidor (DB)</div>
-                <hr>
+                <div onclick="document.getElementById('file-input').click()">Abrir Local</div>
+                <div onclick="if(window.saveLocal) window.saveLocal()">Salvar Local</div>
+                <div onclick="if(window.saveToPython) window.saveToPython()">Salvar (Ctrl+S)</div>
                 <div onclick="location.reload()">Recarregar</div>
             </div>
         </div>
-        
-        <div class="menu-item {% if request.url.path == '/canvas' %}active{% endif %}" onclick="window.location.href='/canvas'">Editor (Canvas)</div>
-        <div class="menu-item {% if request.url.path == '/' %}active{% endif %}" onclick="window.location.href='/'">Início</div>
-        <div class="menu-item" style="margin-left: auto;">Ajuda</div>
+        <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Início</a>
+        <a href="/canvas" class="nav-link {% if request.url.path == '/canvas' %}active{% endif %}">Editor P&ID</a>
+        <a href="/nodes" class="nav-link {% if request.url.path == '/nodes' %}active{% endif %}">Nós</a>
+        <a href="/ducts" class="nav-link {% if request.url.path == '/ducts' %}active{% endif %}">Tubulação</a>
+        <a href="/equipments" class="nav-link {% if request.url.path == '/equipments' %}active{% endif %}">Equipamentos</a>
+        <a href="/simulation" class="nav-link {% if request.url.path == '/simulation' %}active{% endif %}">Simulação</a>
+        <a href="/reports" class="nav-link {% if request.url.path == '/reports' %}active{% endif %}">Relatórios</a>
+        <a href="/help" class="nav-link {% if request.url.path == '/help' %}active{% endif %}" style="margin-left: auto;">Ajuda</a>
     </div>
-
-    <input type="file" id="file-input" accept=".json" style="display: none;" onchange="if(window.loadLocal) window.loadLocal(event)">
-
-    <div class="main-container">
-        {% block content %}{% endblock %}
-    </div>
-
+    <input type="file" id="file-input" style="display: none;" onchange="if(window.loadLocal) window.loadLocal(event)">
+    <div class="main-container">{% block content %}{% endblock %}</div>
     <script>
-        // Lógica visual do menu
-        window.onclick = function(e) {
-            if (!e.target.matches('.menu-item')) {
-                document.querySelectorAll('.dropdown').forEach(d => d.style.display = 'none');
-            }
-        }
-        function toggleMenu(id) {
-            const el = document.getElementById(id);
-            const current = el.style.display;
-            // Fecha outros menus antes de abrir este
-            document.querySelectorAll('.dropdown').forEach(d => d.style.display = 'none');
-            el.style.display = current === 'block' ? 'none' : 'block';
-        }
+        window.onclick = function(e) { if (!e.target.closest('.file-menu-btn')) document.querySelectorAll('.dropdown').forEach(d => d.style.display = 'none'); }
     </script>
 </body>
 </html>

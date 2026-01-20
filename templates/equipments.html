@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+    .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
+    .card { background: white; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+    .tag { font-weight: bold; font-size: 18px; color: #0078d7; }
+    .type { background: #eee; padding: 3px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; }
+    
+    .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+    .field label { display: block; font-size: 13px; color: #666; margin-bottom: 5px; }
+    .field input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+</style>
+
+<div class="page-content">
+    <h2>Lista de Equipamentos</h2>
+    <div id="cards-container"></div>
+</div>
+
+<script>
+    fetch('/api/get-mesh').then(r => r.json()).then(data => {
+        const container = document.getElementById('cards-container');
+        
+        // Filtra apenas equipamentos reais (ignora nós simples por enquanto)
+        const equips = data.nodes.filter(n => ['pump', 'comp', 'sep'].includes(n.type));
+
+        equips.forEach(eq => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            let fields = '';
+            if (eq.type === 'pump') {
+                fields = `
+                    <div class="field"><label>Potência (HP)</label><input type="number" value="50"></div>
+                    <div class="field"><label>Eficiência (%)</label><input type="number" value="75"></div>
+                    <div class="field"><label>Curva (Head max)</label><input type="number" value="100"></div>
+                `;
+            } else if (eq.type === 'comp') {
+                fields = `
+                    <div class="field"><label>Razão de Compressão</label><input type="number" value="3.5"></div>
+                    <div class="field"><label>Temperatura Descarga (°C)</label><input type="number" value="120"></div>
+                    <div class="field"><label>Rotação (RPM)</label><input type="number" value="1500"></div>
+                `;
+            } else {
+                fields = `
+                    <div class="field"><label>Volume (m³)</label><input type="number" value="10"></div>
+                    <div class="field"><label>Pressão Operação (bar)</label><input type="number" value="20"></div>
+                    <div class="field"><label>Eficiência Separação</label><input type="number" value="0.98"></div>
+                `;
+            }
+
+            let typeName = eq.type === 'pump' ? 'Bomba' : eq.type === 'comp' ? 'Compressor' : 'Separador';
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="tag">${eq.name}</span>
+                    <span class="type">${typeName}</span>
+                </div>
+                <div class="grid-form">${fields}</div>
+            `;
+            container.appendChild(card);
+        });
+
+        if (equips.length === 0) {
+            container.innerHTML = '<p style="color:#777; text-align:center;">Nenhum equipamento especial adicionado (Bombas, Compressores...). Adicione-os no Canvas.</p>';
+        }
+    });
+</script>
+{% endblock %}

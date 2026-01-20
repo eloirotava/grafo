@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div style="padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333;">
+    <h1 style="color: #0078d7;">Manual do RotavaFlow</h1>
+    <p>Bem-vindo ao simulador de escoamento. Abaixo estão as instruções básicas.</p>
+    
+    <h3>1. Editor (Canvas)</h3>
+    <ul>
+        <li>Arraste componentes da barra lateral esquerda para a área branca.</li>
+        <li>Arraste "Duto" para criar conexões.</li>
+        <li>As setas se conectam automaticamente (snap) aos pontos pretos dos equipamentos.</li>
+        <li><strong>Duplo clique</strong> em qualquer item para renomeá-lo.</li>
+        <li>Use <strong>Ctrl+S</strong> para salvar seu progresso no servidor.</li>
+    </ul>
+
+    <h3>2. Simulação</h3>
+    <p>Na aba "Simulação", configure as propriedades do fluido (densidade, viscosidade) e os parâmetros numéricos do solver.</p>
+
+    <h3>3. Relatórios</h3>
+    <p>Visualize os perfis de pressão, temperatura e vazão após a execução da simulação.</p>
+</div>
+{% endblock %}
