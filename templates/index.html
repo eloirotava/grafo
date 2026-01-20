@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>RotavaFlow: Validação de Portas</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; overflow: hidden; background-color: #f4f6f9; }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 140px; background-color: #2c3e50; color: #ecf0f1;
+            display: flex; flex-direction: column; align-items: center; padding-top: 20px;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.15); z-index: 10; gap: 10px;
+        }
+        .sidebar h4 { margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; opacity: 0.8; }
+        
+        .palette-item {
+            width: 100px; height: 70px; background-color: #34495e;
+            border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: grab; transition: 0.2s; border: 2px solid transparent;
+        }
+        .palette-item:hover { transform: translateY(-2px); background-color: #3e5871; border-color: #3498db; }
+        .palette-item span { margin-top: 6px; font-size: 0.75rem; font-weight: 600; }
+
+        /* Ícones */
+        .icon-node { width: 16px; height: 16px; border-radius: 50%; background: #3498db; border: 2px solid #ecf0f1; }
+        .icon-double { width: 24px; height: 16px; background: #e67e22; border: 1px solid #ecf0f1; border-radius: 2px; }
+        .icon-tri { width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 18px solid #f1c40f; }
+        .icon-square { width: 18px; height: 18px; background: #9b59b6; }
+        .icon-arrow { width: 30px; height: 2px; background: #ecf0f1; position: relative; }
+        .icon-arrow::after { content:''; position: absolute; right: -2px; top: -3px; border-left: 5px solid #ecf0f1; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+
+        /* Canvas */
+        .canvas-wrapper { flex-grow: 1; position: relative; }
+        .save-btn {
+            position: absolute; top: 20px; right: 20px; padding: 10px 20px;
+            background-color: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer;
+            font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 100;
+        }
+        .hint { position: absolute; bottom: 10px; left: 20px; color: #7f8c8d; font-size: 0.85rem; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h4>Componentes</h4>
+    
+    <div class="palette-item" draggable="true" ondragstart="handleDragStart(event, 'node')">
+        <div class="icon-node"></div>
+        <span>Nó</span>
+    </div>
+    
+    <div class="palette-item" draggable="true" ondragstart="handleDragStart(event, 'double')">
+        <div class="icon-double"></div>
+        <span>Duplo (2)</span>
+    </div>
+
+    <div class="palette-item" draggable="true" ondragstart="handleDragStart(event, 'triangle')">
+        <div class="icon-tri"></div>
+        <span>Triplo (3)</span>
+    </div>
+
+    <div class="palette-item" draggable="true" ondragstart="handleDragStart(event, 'square')">
+        <div class="icon-square"></div>
+        <span>Quádruplo (4)</span>
+    </div>
+
+    <div style="height:10px;"></div>
+    <h4>Conexão</h4>
+    <div class="palette-item" draggable="true" ondragstart="handleDragStart(event, 'duct')">
+        <div class="icon-arrow"></div>
+        <span>Duto</span>
+    </div>
+</div>
+
+<div class="canvas-wrapper" id="canvas-container">
+    <button class="save-btn" onclick="saveToPython()">Salvar Malha</button>
+    <div class="hint">Portas ocupadas não aceitam novas conexões (exceto no Nó).</div>
+    <canvas id="c"></canvas>
+</div>
+
+<script>
+    const canvas = new fabric.Canvas('c', { selection: true });
+    
+    function resizeCanvas() {
+        const el = document.getElementById('canvas-container');
+        canvas.setWidth(el.clientWidth);
+        canvas.setHeight(el.clientHeight);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let nodeSeq = 1;
+    let ductSeq = 1;
+
+    // --- Drag & Drop ---
+    function handleDragStart(e, type) { e.dataTransfer.setData("type", type); }
+    const container = document.getElementById('canvas-container');
+    container.ondragover = (e) => e.preventDefault();
+    container.ondrop = (e) => {
+        e.preventDefault();
+        const type = e.dataTransfer.getData("type");
+        const pointer = canvas.getPointer(e);
+        
+        if (type === 'duct') createDuct(pointer.x, pointer.y);
+        else createNode(pointer.x, pointer.y, type);
+    };
+
+    // --- Criação de Nós ---
+    function createNode(x, y, type) {
+        let prefix = 'N';
+        if (type === 'double') prefix = 'D';
+        else if (type === 'triangle') prefix = 'T';
+        else if (type === 'square') prefix = 'Q';
+
+        const id = prefix + nodeSeq++;
+        const name = id;
+        const objects = [];
+
+        function addPort(lx, ly, portId) {
+            const port = new fabric.Circle({ 
+                radius: 3, fill: '#2c3e50', left: lx, top: ly, 
+                originX: 'center', originY: 'center', stroke: 'white', strokeWidth: 1
+            });
+            port.portId = portId;
+            objects.push(port);
+            return port;
+        }
+
+        if (type === 'node') {
+            const circle = new fabric.Circle({ radius: 12, fill: '#3498db', stroke: '#2980b9', strokeWidth: 2, originX: 'center', originY: 'center' });
+            objects.push(circle);
+            addPort(0, 0, 0);
+
+        } else if (type === 'double') {
+            const rect = new fabric.Rect({ width: 50, height: 30, fill: '#e67e22', stroke:'#d35400', strokeWidth:2, rx: 4, ry: 4, originX: 'center', originY: 'center' });
+            objects.push(rect);
+            addPort(-25, 0, 1);
+            addPort(25, 0, 2);
+
+        } else if (type === 'triangle') {
+            const tri = new fabric.Triangle({ width: 44, height: 40, fill: '#f1c40f', stroke:'#f39c12', strokeWidth:2, originX: 'center', originY: 'center' });
+            objects.push(tri);
+            addPort(0, -20, 3);
+            addPort(-22, 20, 1);
+            addPort(22, 20, 2);
+
+        } else if (type === 'square') {
+            const rect = new fabric.Rect({ width: 40, height: 40, fill: '#9b59b6', stroke:'#8e44ad', strokeWidth:2, originX: 'center', originY: 'center' });
+            objects.push(rect);
+            addPort(-20, -20, 1);
+            addPort(20, -20, 2);
+            addPort(20, 20, 3);
+            addPort(-20, 20, 4);
+        }
+
+        const label = new fabric.Text(name, { 
+            fontSize: 12, fill: '#333', top: (type==='triangle'? 30 : 25), 
+            originX: 'center', originY: 'center', fontWeight: '600' 
+        });
+        objects.push(label);
+
+        const group = new fabric.Group(objects, {
+            left: x, top: y, originX: 'center', originY: 'center',
+            hasControls: false, hasBorders: false, subTargetCheck: true
+        });
+
+        group.data = { type: 'equipment', subType: type, id: id, name: name, labelObj: label };
+        group.on('moving', () => updateConnectedLines(group));
+        
+        canvas.add(group);
+        group.scale(0.1); group.animate('scaleX', 1, { onChange: canvas.renderAll.bind(canvas) });
+        group.animate('scaleY', 1, { onChange: canvas.renderAll.bind(canvas) });
+    }
+
+    // --- Criação de Dutos ---
+    function createDuct(x, y) {
+        const id = 'L' + ductSeq++;
+        const name = id;
+        const startX = x - 40, endX = x + 40;
+
+        const anchorOpts = { radius: 5, fill: '#e74c3c', originX: 'center', originY: 'center', hasControls: false, hasBorders: false };
+        const p1 = new fabric.Circle({ left: startX, top: y, ...anchorOpts });
+        const p2 = new fabric.Circle({ left: endX, top: y, ...anchorOpts });
+
+        const line = new fabric.Line([startX, y, endX, y], {
+            stroke: '#34495e', strokeWidth: 3, selectable: true, hasControls: false, hasBorders: false, originX: 'center', originY: 'center'
+        });
+        
+        const head = new fabric.Triangle({ width: 12, height: 12, fill: '#34495e', originX: 'center', originY: 'center', selectable: false });
+        
+        const label = new fabric.Text(name, { 
+            fontSize: 11, fill: '#e67e22', backgroundColor: 'rgba(255,255,255,0.7)', 
+            originX: 'center', originY: 'center',
+            selectable: false, evented: true
+        });
+
+        const ductData = { type: 'duct', id: id, name: name, p1: p1, p2: p2, head: head, label: label, line: line };
+        
+        line.data = ductData; head.data = ductData; label.data = ductData;
+        p1.data = { isAnchor: true, parent: ductData };
+        p2.data = { isAnchor: true, parent: ductData };
+
+        line.on('mousedown', function() { this.lastLeft = this.left; this.lastTop = this.top; });
+        line.on('moving', function() {
+            const dx = this.left - this.lastLeft;
+            const dy = this.top - this.lastTop;
+            p1.set({ left: p1.left + dx, top: p1.top + dy }).setCoords();
+            p2.set({ left: p2.left + dx, top: p2.top + dy }).setCoords();
+            this.lastLeft = this.left; this.lastTop = this.top;
+            updateDuctVisuals(ductData);
+        });
+
+        [p1, p2].forEach(p => {
+            p.on('moving', () => updateDuctVisuals(ductData));
+            p.on('modified', () => { checkSnap(p); updateDuctVisuals(ductData); });
+        });
+
+        canvas.add(line, head, label, p1, p2);
+        updateDuctVisuals(ductData);
+    }
+
+    function updateDuctVisuals(data) {
+        const { line, p1, p2, head, label } = data;
+        line.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top });
+        line._setWidthHeight();
+        
+        const angle = Math.atan2(p2.top - p1.top, p2.left - p1.left) * 180 / Math.PI;
+        head.set({ left: p2.left, top: p2.top, angle: angle + 90 }).setCoords();
+        
+        const midX = (p1.left + p2.left) / 2;
+        const midY = (p1.top + p2.top) / 2;
+        label.set({ left: midX, top: midY - 15 }).setCoords();
+        canvas.renderAll();
+    }
+
+    // --- VALIDAR PORTAS OCUPADAS ---
+    function isPortOccupied(nodeId, portId, selfDuctId) {
+        // Varre todos os dutos do canvas
+        const lines = canvas.getObjects('line').filter(o => o.data && o.data.type === 'duct');
+        
+        for (let line of lines) {
+            const d = line.data;
+            if (d.id === selfDuctId) continue; // Ignora a própria seta
+
+            // Verifica se o começo ou fim desta seta já usa o (nodeId, portId)
+            const p1Data = d.p1.data;
+            const p2Data = d.p2.data;
+
+            if (p1Data.linkedNode === nodeId && p1Data.linkedPort === portId) return true;
+            if (p2Data.linkedNode === nodeId && p2Data.linkedPort === portId) return true;
+        }
+        return false;
+    }
+
+    // --- SNAP com Validação ---
+    function checkSnap(anchor) {
+        anchor.set({ fill: '#e74c3c' });
+        anchor.data.linkedNode = null;
+        anchor.data.linkedPort = 0;
+
+        const groups = canvas.getObjects('group').filter(o => o.data && o.data.type === 'equipment');
+        let snapped = false;
+
+        for (let group of groups) {
+            const matrix = group.calcTransformMatrix();
+            const objects = group.getObjects();
+            
+            for (let obj of objects) {
+                if (obj.portId !== undefined) {
+                    const globalPos = fabric.util.transformPoint(new fabric.Point(obj.left, obj.top), matrix);
+                    
+                    if (Math.hypot(anchor.left - globalPos.x, anchor.top - globalPos.y) < 20) {
+                        
+                        // REGRA: Só valida ocupação se NÃO for um Nó (Node pode ter infinitas conexões)
+                        const isNode = (group.data.subType === 'node');
+                        
+                        if (!isNode) {
+                            // Verifica se já tem alguém aqui
+                            if (isPortOccupied(group.data.id, obj.portId, anchor.data.parent.id)) {
+                                console.log("Porta ocupada!");
+                                // Se quiser dar um feedback visual (piscar), pode por aqui
+                                break; 
+                            }
+                        }
+
+                        // Se passou da validação, gruda
+                        anchor.set({ left: globalPos.x, top: globalPos.y, fill: '#27ae60' });
+                        anchor.setCoords();
+                        anchor.data.linkedNode = group.data.id;
+                        anchor.data.linkedPort = obj.portId;
+                        snapped = true;
+                        break;
+                    }
+                }
+            }
+            if (snapped) break;
+        }
+    }
+
+    // --- Atualizar Linhas Conectadas ---
+    function updateConnectedLines(group) {
+        const nodeId = group.data.id;
+        const matrix = group.calcTransformMatrix();
+        const portPositions = {};
+        
+        group.getObjects().forEach(obj => {
+            if (obj.portId !== undefined) {
+                portPositions[obj.portId] = fabric.util.transformPoint(new fabric.Point(obj.left, obj.top), matrix);
+            }
+        });
+
+        canvas.getObjects('circle').forEach(anchor => {
+            if (anchor.data && anchor.data.isAnchor && anchor.data.linkedNode === nodeId) {
+                const pid = anchor.data.linkedPort || 0;
+                if (portPositions[pid]) {
+                    anchor.set({ left: portPositions[pid].x, top: portPositions[pid].y }).setCoords();
+                    updateDuctVisuals(anchor.data.parent);
+                }
+            }
+        });
+    }
+
+    // --- Renomear ---
+    canvas.on('mouse:dblclick', function(options) {
+        if (!options.target) return;
+        let target = options.target;
+        if (target.group) target = target.group;
+
+        const data = target.data;
+        if (!data) return;
+
+        if (data.type === 'equipment') {
+            const newName = prompt(`Renomear:`, data.name);
+            if (newName) {
+                data.name = newName;
+                data.labelObj.set({ text: newName });
+                canvas.renderAll();
+            }
+        } else if (data.type === 'duct') {
+            const newName = prompt(`Renomear Duto:`, data.name);
+            if (newName) {
+                data.name = newName;
+                data.label.set({ text: newName });
+                canvas.renderAll();
+            }
+        }
+    });
+
+    // --- Salvar ---
+    async function saveToPython() {
+        const nodes = canvas.getObjects('group')
+            .filter(o => o.data?.type === 'equipment')
+            .map(o => ({ 
+                id: o.data.id, name: o.data.name, type: o.data.subType, x: o.left, y: o.top 
+            }));
+
+        const ducts = [];
+        canvas.getObjects('line').forEach(line => {
+            if (line.data && line.data.type === 'duct') {
+                const d = line.data;
+                ducts.push({
+                    id: d.id, name: d.name,
+                    start_id: d.p1.data.linkedNode || null,
+                    end_id: d.p2.data.linkedNode || null,
+                    start_port: d.p1.data.linkedPort || 0,
+                    end_port: d.p2.data.linkedPort || 0
+                });
+            }
+        });
+
+        try {
+            const res = await fetch('/api/mesh-db', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nodes, ducts })
+            });
+            const json = await res.json();
+            alert(json.message);
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao salvar.");
+        }
+    }
+</script>
+
+</body>
+</html>
