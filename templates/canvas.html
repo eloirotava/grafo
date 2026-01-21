@@ -2,8 +2,8 @@
 
 {% block content %}
 <style>
-    /* Layout */
-    .editor-layout { display: flex; flex-grow: 1; height: 100%; overflow: hidden; }
+    /* Layout Geral */
+    .editor-layout { display: flex; flex-grow: 1; height: 100%; overflow: hidden; background: #1e1e1e; }
     
     /* Sidebar */
     .sidebar { width: 150px; background-color: #252526; color: #ccc; display: flex; flex-direction: column; align-items: center; padding-top: 15px; border-right: 1px solid #3e3e42; overflow-y: auto; user-select: none; }
@@ -14,33 +14,42 @@
     .palette-item:hover { background-color: #3e3e42; border-color: #007acc; transform: translateY(-2px); }
     .palette-item span { margin-top: 6px; font-size: 12px; }
 
-    /* Ícones Geométricos Limpos */
+    .action-btn { width: 120px; padding: 8px; margin-bottom: 10px; background: #c0392b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .action-btn:hover { background: #e74c3c; }
+
+    /* Ícones CSS */
     .icon-node { width: 12px; height: 12px; border-radius: 50%; background: #3498db; border: 2px solid #fff; }
-    .icon-mono { width: 24px; height: 24px; border-radius: 50%; background: #1abc9c; border: 2px solid #fff; } /* Verde Água */
-    .icon-double { width: 30px; height: 18px; background: #e67e22; border: 2px solid #fff; border-radius: 2px; }
+    .icon-mono { width: 24px; height: 24px; border-radius: 50%; background: #1abc9c; border: 2px solid #fff; }
+    .icon-double { width: 30px; height: 18px; background: #e67e22; border: 2px solid #fff; border-radius: 2px; } 
     .icon-tri { width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 20px solid #f1c40f; }
     .icon-quad { width: 20px; height: 20px; background: #9b59b6; border: 2px solid #fff; }
+    .icon-valve { width: 24px; height: 14px; background: #e67e22; border: 2px solid #fff; border-radius: 2px; position: relative; }
+    .icon-valve::after { content: ''; position: absolute; top: -4px; left: 10px; width: 2px; height: 4px; background: #fff; }
     .icon-arrow { width: 26px; height: 2px; background: #fff; position: relative; }
     .icon-arrow::after { content:''; position: absolute; right: -2px; top: -3px; border-left: 5px solid #fff; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 
-    /* Área do Canvas */
-    .canvas-area { flex-grow: 1; background-color: #1e1e1e; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    /* Canvas */
+    .canvas-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; outline: none; }
     canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
     .statusbar { position: absolute; bottom: 0; left: 0; right: 0; height: 22px; background-color: #007acc; color: white; display: flex; align-items: center; padding: 0 10px; font-size: 11px; pointer-events: none; z-index: 999; }
 </style>
 
-<div class="editor-layout">
+<div class="editor-layout" id="main-layout" tabindex="0">
     <div class="sidebar">
+        <div class="palette-group">
+            <div class="group-title">Acessórios</div>
+            <div class="palette-item" draggable="true" ondragstart="drag(event, 'valve')"><div class="icon-valve"></div><span>In-line</span></div>
+        </div>
         <div class="palette-group">
             <div class="group-title">Junções</div>
             <div class="palette-item" draggable="true" ondragstart="drag(event, 'node')"><div class="icon-node"></div><span>Nó (Ponto)</span></div>
         </div>
         <div class="palette-group">
             <div class="group-title">Equipamentos</div>
-            <div class="palette-item" draggable="true" ondragstart="drag(event, 'mono')"><div class="icon-mono"></div><span>Mono (1)</span></div>
-            <div class="palette-item" draggable="true" ondragstart="drag(event, 'double')"><div class="icon-double"></div><span>Duplo (2)</span></div>
-            <div class="palette-item" draggable="true" ondragstart="drag(event, 'triangle')"><div class="icon-tri"></div><span>Triplo (3)</span></div>
-            <div class="palette-item" draggable="true" ondragstart="drag(event, 'square')"><div class="icon-quad"></div><span>Quádruplo (4)</span></div>
+            <div class="palette-item" draggable="true" ondragstart="drag(event, 'mono')"><div class="icon-mono"></div><span>Mono</span></div>
+            <div class="palette-item" draggable="true" ondragstart="drag(event, 'double')"><div class="icon-double"></div><span>Duplo</span></div>
+            <div class="palette-item" draggable="true" ondragstart="drag(event, 'triangle')"><div class="icon-tri"></div><span>Triplo</span></div>
+            <div class="palette-item" draggable="true" ondragstart="drag(event, 'square')"><div class="icon-quad"></div><span>Quádruplo</span></div>
         </div>
         <div class="palette-group">
             <div class="group-title">Conexões</div>
@@ -50,19 +59,25 @@
     
     <div class="canvas-area" id="wrap">
         <canvas id="c"></canvas>
-        <div class="statusbar" id="status-msg">Pronto. Arraste itens para o canvas.</div>
+        <div class="statusbar" id="status-msg">Pronto.</div>
     </div>
 </div>
 
 <script>
     const canvas = new fabric.Canvas('c', { selection: true, preserveObjectStacking: true, backgroundColor: '#ffffff' });
-    let nodeSeq = 1, ductSeq = 1;
+    let nodeSeq = 1, ductSeq = 1, valveSeq = 1;
+
+    // Constantes
+    const VALVE_CENTER_OFFSET = -7; 
+    const SNAP_DISTANCE = 60; 
+    const STORAGE_KEY = 'malha_db_v2';
+
     function setStatus(m) { document.getElementById('status-msg').innerText = m; }
 
-    // --- Redimensionamento ---
+    // --- Resizing ---
     function resize() {
         const w = document.getElementById('wrap');
-        canvas.setWidth(w.clientWidth - 40); canvas.setHeight(w.clientHeight - 40); canvas.renderAll();
+        canvas.setWidth(w.clientWidth); canvas.setHeight(w.clientHeight - 22); canvas.renderAll();
     }
     window.addEventListener('resize', resize); setTimeout(resize, 100);
 
@@ -73,210 +88,376 @@
     wrap.ondrop = e => {
         e.preventDefault();
         const type = e.dataTransfer.getData("type");
-        const rect = canvas.getElement().getBoundingClientRect();
-        const x = e.clientX - rect.left; const y = e.clientY - rect.top;
-        if(type==='duct') createDuct(x,y); else createEq(x,y,type);
+        const p = canvas.getPointer(e);
+        if(type==='duct') createDuct(p.x, p.y);
+        else createEq(p.x, p.y, type);
+        saveState();
     };
 
-    // --- CRIAÇÃO DE EQUIPAMENTOS ---
-    function createEq(x, y, type, loadId=null, loadName=null) {
-        let prefix = 'E';
-        if(type==='node') prefix='N'; if(type==='mono') prefix='M'; if(type==='double') prefix='D'; if(type==='triangle') prefix='T'; if(type==='square') prefix='Q';
-        
-        const id = loadId || (prefix + nodeSeq++);
-        const name = loadName || id;
-        const objs = [];
-        const addPort = (lx, ly, pid) => { objs.push(new fabric.Circle({radius:3, fill:'#333', left:lx, top:ly, originX:'center', originY:'center', portId:pid, stroke:'#fff', strokeWidth:1})); };
-
-        if (type === 'node') {
-            objs.push(new fabric.Circle({radius:8, fill:'#3498db', stroke:'#2980b9', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0,0,0); // Porta Central
-        } else if (type === 'mono') { // Fonte/Reservatório
-            objs.push(new fabric.Circle({radius:20, fill:'#1abc9c', stroke:'#16a085', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0, 20, 1); // 1 Porta em baixo
-        } else if (type === 'double') {
-            objs.push(new fabric.Rect({width:50, height:30, fill:'#e67e22', stroke:'#d35400', strokeWidth:2, rx:4, ry:4, originX:'center', originY:'center'}));
-            addPort(-25, 0, 1); addPort(25, 0, 2);
-        } else if (type === 'triangle') {
-            objs.push(new fabric.Triangle({width:44, height:40, fill:'#f1c40f', stroke:'#f39c12', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0, -20, 3); addPort(-22, 20, 1); addPort(22, 20, 2);
-        } else if (type === 'square') {
-            objs.push(new fabric.Rect({width:40, height:40, fill:'#9b59b6', stroke:'#8e44ad', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(-20, -20, 1); addPort(20, -20, 2); addPort(20, 20, 3); addPort(-20, 20, 4);
+    // --- TECLA DELETE (APAGAR ITENS) ---
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            const active = canvas.getActiveObject();
+            if (active) {
+                deleteObject(active);
+                canvas.discardActiveObject();
+                canvas.renderAll();
+                saveState();
+            }
         }
+    });
 
-        const label = new fabric.Text(name, {fontSize:12, fill:'#333', top:(type==='node'?15:28), originX:'center', originY:'center', fontWeight:'600', fontFamily:'Segoe UI'});
-        objs.push(label);
+    function deleteObject(obj) {
+        // Se for um Grupo (Equipamento, Nó, Válvula)
+        if (obj.type === 'group') {
+            canvas.remove(obj);
+        }
+        // Se for parte de um Duto (Ponto vermelho ou a própria linha se estiver selecionável)
+        else if (obj.data && (obj.data.isAnchor || obj.data.type === 'duct')) {
+            // Recupera a estrutura completa do duto
+            const ductData = obj.data.parent || obj.data; 
+            
+            // Remove todas as partes visuais
+            canvas.remove(ductData.line);
+            canvas.remove(ductData.head);
+            canvas.remove(ductData.label);
+            canvas.remove(ductData.p1Obj);
+            canvas.remove(ductData.p2Obj);
 
-        const group = new fabric.Group(objs, {left:x, top:y, subTargetCheck:true, hasControls:false, hasBorders:false});
-        group.data = {type:'equipment', subType:type, id:id, name:name, labelObj:label};
-        
-        group.on('moving', () => updateLines(group));
-        canvas.add(group); canvas.sendToBack(group); // NÓ NO FUNDO
-        setStatus(`Criado: ${name}`);
-        return group;
+            // DESACOPLA VÁLVULAS QUE ESTAVAM NESSE DUTO
+            canvas.getObjects('group').forEach(g => {
+                if (g.data && g.data.type === 'valve' && g.data.attachedDuctId === ductData.id) {
+                    g.data.attachedDuctId = null;
+                    g.item(0).set('stroke', '#d35400'); // Volta cor laranja
+                    g.set('angle', 0); // Reseta angulo
+                }
+            });
+        }
     }
 
-    // --- CRIAÇÃO DE DUTOS ---
-    function createDuct(x, y, loadId=null, loadName=null) {
-        const id = loadId || ('L' + ductSeq++);
-        const name = loadName || id;
-        const p1 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x-40, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
-        const p2 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x+40, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
-        const line = new fabric.Line([x-40,y,x+40,y], {stroke:'#555', strokeWidth:3, selectable:true, hasControls:false, hasBorders:false, originX:'center', originY:'center'});
-        const head = new fabric.Triangle({width:10, height:10, fill:'#555', originX:'center', originY:'center', selectable:false});
-        const label = new fabric.Text(name, {fontSize:11, fill:'#e67e22', backgroundColor:'#fff', originX:'center', originY:'center', selectable:false, evented:true});
+    // --- VERIFICAÇÃO DE PORTA OCUPADA ---
+    function isPortOccupied(nodeId, portId, ignoreDuctId) {
+        // Varre todas as linhas (dutos)
+        const lines = canvas.getObjects('line');
+        for (let l of lines) {
+            if (!l.data) continue;
+            // Ignora o duto que estamos movendo agora (ele não ocupa a si mesmo)
+            if (l.data.id === ignoreDuctId) continue;
 
-        const data = {type:'duct', id, name, p1, p2, line, head, label};
-        line.data=head.data=label.data=data; p1.data=p2.data={isAnchor:true, parent:data};
+            const p1 = l.data.p1Obj.data;
+            const p2 = l.data.p2Obj.data;
 
-        const update = () => {
-            line.set({x1:p1.left, y1:p1.top, x2:p2.left, y2:p2.top}); line._setWidthHeight();
-            const angle = Math.atan2(p2.top-p1.top, p2.left-p1.left) * 180 / Math.PI;
-            head.set({left:p2.left, top:p2.top, angle:angle+90});
-            label.set({left:(p1.left+p2.left)/2, top:(p1.top+p2.top)/2 - 15});
-            canvas.renderAll();
-        };
-
-        line.on('mousedown', function(){this.lastLeft=this.left; this.lastTop=this.top});
-        line.on('moving', function(){
-            const dx=this.left-this.lastLeft, dy=this.top-this.lastTop;
-            p1.set({left:p1.left+dx, top:p1.top+dy}).setCoords(); p2.set({left:p2.left+dx, top:p2.top+dy}).setCoords();
-            this.lastLeft=this.left; this.lastTop=this.top; update();
-        });
-        [p1,p2].forEach(p => {
-            p.on('moving', update);
-            p.on('modified', () => { checkSnap(p); update(); });
-        });
-
-        canvas.add(line, head, label, p1, p2); p1.bringToFront(); p2.bringToFront();
-        update();
-        return line;
+            // Se P1 ou P2 dessa linha já estão ligados ao (Node, Port) alvo
+            if ((p1.linkedNode === nodeId && p1.linkedPort === portId) ||
+                (p2.linkedNode === nodeId && p2.linkedPort === portId)) {
+                return true; // Ocupado!
+            }
+        }
+        return false; // Livre
     }
 
-    // --- SNAP LÓGICA ---
-    function isOccupied(nodeId, portId, selfId) {
-        return canvas.getObjects('line').some(l => {
-            if(!l.data || l.data.id === selfId) return false;
-            const d = l.data;
-            return (d.p1.data.linkedNode===nodeId && d.p1.data.linkedPort===portId) || (d.p2.data.linkedNode===nodeId && d.p2.data.linkedPort===portId);
-        });
-    }
-
+    // --- CONEXÃO DE PONTOS (SNAP) COM REGRAS ---
     function checkSnap(anchor) {
-        anchor.set({fill:'#e74c3c'}); anchor.data.linkedNode=null; anchor.data.linkedPort=0;
+        anchor.set({fill:'#e74c3c'}); 
+        anchor.data.linkedNode=null; anchor.data.linkedPort=0;
+        
         let snapped = false;
+        
+        // Loop pelos equipamentos
         canvas.getObjects('group').forEach(g => {
-            if(snapped || !g.data || g.data.type!=='equipment') return;
+            if(snapped || !g.data || g.data.type==='valve') return;
+            
             const m = g.calcTransformMatrix();
             g.getObjects().forEach(o => {
-                if(o.portId===undefined) return;
+                if(o.portId===undefined) return; // Não é uma porta
+
                 const gp = fabric.util.transformPoint(new fabric.Point(o.left, o.top), m);
-                if(Math.hypot(anchor.left-gp.x, anchor.top-gp.y) < 20) {
-                    if(g.data.subType !== 'node' && isOccupied(g.data.id, o.portId, anchor.data.parent.id)) {
-                        setStatus("Porta Ocupada!"); return;
+                
+                // Checa distância
+                if(Math.hypot(anchor.left - gp.x, anchor.top - gp.y) < 20) {
+                    
+                    // REGRA: Se NÃO for um Nó (Node), verifica se a porta já tem dono
+                    if (g.data.subType !== 'node') {
+                        const currentDuctId = anchor.data.parent.id;
+                        if (isPortOccupied(g.data.id, o.portId, currentDuctId)) {
+                            setStatus(`Porta ocupada em ${g.data.name}!`);
+                            return; // Pula essa conexão, não conecta
+                        }
                     }
-                    anchor.set({left:gp.x, top:gp.y, fill:'#27ae60'}); anchor.setCoords();
-                    anchor.data.linkedNode=g.data.id; anchor.data.linkedPort=o.portId;
-                    snapped=true; anchor.bringToFront();
+
+                    // Se passou, conecta
+                    anchor.set({left:gp.x, top:gp.y, fill:'#27ae60'}); 
+                    anchor.setCoords();
+                    anchor.data.linkedNode = g.data.id; 
+                    anchor.data.linkedPort = o.portId;
+                    snapped = true;
                     setStatus(`Conectado a ${g.data.name}`);
                 }
             });
         });
     }
 
-    function updateLines(g) {
-        const m = g.calcTransformMatrix();
-        const ports = {}; g.getObjects().forEach(o=>{if(o.portId!==undefined) ports[o.portId]=fabric.util.transformPoint(new fabric.Point(o.left,o.top),m);});
-        canvas.getObjects('circle').forEach(p => {
-            if(p.data?.isAnchor && p.data.linkedNode===g.data.id) {
-                const pos = ports[p.data.linkedPort||0];
-                if(pos) { p.set({left:pos.x, top:pos.y}).setCoords(); p.data.parent.line.set({x1:p.left}); canvas.renderAll(); } // trigger visual
-                const d = p.data.parent; d.line.set({x1:d.p1.left, y1:d.p1.top, x2:d.p2.left, y2:d.p2.top}); // force re-calc
-                const angle = Math.atan2(d.p2.top-d.p1.top, d.p2.left-d.p1.left) * 180 / Math.PI;
-                d.head.set({left:d.p2.left, top:d.p2.top, angle:angle+90});
-                d.label.set({left:(d.p1.left+d.p2.left)/2, top:(d.p1.top+d.p2.top)/2-15});
-            }
-        });
+    // --- Layer Manager ---
+    function organizeLayers() {
+        canvas.getObjects('line').forEach(o => o.sendToBack());
+        canvas.getObjects('group').forEach(o => o.bringToFront());
+        canvas.getObjects('circle').forEach(o => { if(o.data?.isAnchor) o.bringToFront(); });
+        canvas.requestRenderAll();
     }
 
-    // --- PERSISTÊNCIA ---
+    // --- EQUIPAMENTOS ---
+    function createEq(x, y, type, loadId=null, loadName=null) {
+        let prefix = 'E';
+        if(type==='node') prefix='N'; if(type==='valve') prefix='V';
+        
+        const id = loadId || (prefix + (type==='valve'?valveSeq++:nodeSeq++));
+        const name = loadName || id;
+        const objs = [];
+
+        const addPort = (lx, ly, pid) => { objs.push(new fabric.Circle({radius:3, fill:'#333', left:lx, top:ly, originX:'center', originY:'center', portId:pid, stroke:'#fff', strokeWidth:1})); };
+
+        if (type === 'valve') {
+            objs.push(new fabric.Rect({width:30, height:16, fill:'#e67e22', stroke:'#d35400', strokeWidth:2, rx:2, ry:2, originX:'center', originY:'center'}));
+            objs.push(new fabric.Line([0,-8, 0,8], {stroke:'#d35400', strokeWidth:1, originX:'center', originY:'center'})); 
+            const label = new fabric.Text(name, {fontSize:11, fill:'#333', top: 24, originX:'center', originY:'center', fontWeight:'600', fontFamily:'Segoe UI'});
+            objs.push(label);
+        } else if (type === 'node') {
+            objs.push(new fabric.Circle({radius:8, fill:'#3498db', stroke:'#2980b9', strokeWidth:2, originX:'center', originY:'center'}));
+            addPort(0,0,0);
+            objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:15, originX:'center', originY:'center', fontWeight:'600'}));
+        } else {
+            // Equipamentos com Portas Limitadas
+            if (type === 'mono') {
+                objs.push(new fabric.Circle({radius:20, fill:'#1abc9c', stroke:'#16a085', strokeWidth:2, originX:'center', originY:'center'}));
+                addPort(0, 20, 1);
+            } else if (type === 'double') {
+                objs.push(new fabric.Rect({width:50, height:30, fill:'#e67e22', stroke:'#d35400', strokeWidth:2, rx:4, ry:4, originX:'center', originY:'center'}));
+                addPort(-25, 0, 1); addPort(25, 0, 2);
+            } else if (type === 'triangle') {
+                objs.push(new fabric.Triangle({width:44, height:40, fill:'#f1c40f', stroke:'#f39c12', strokeWidth:2, originX:'center', originY:'center'}));
+                addPort(0, -20, 3); addPort(-22, 20, 1); addPort(22, 20, 2);
+            } else if (type === 'square') {
+                objs.push(new fabric.Rect({width:40, height:40, fill:'#9b59b6', stroke:'#8e44ad', strokeWidth:2, originX:'center', originY:'center'}));
+                addPort(-20, -20, 1); addPort(20, -20, 2); addPort(20, 20, 3); addPort(-20, 20, 4);
+            }
+            objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
+        }
+
+        const group = new fabric.Group(objs, {left:x, top:y, subTargetCheck:true, hasControls:false, hasBorders:false});
+        group.data = {type:(type==='valve'?'valve':'equipment'), subType:type, id:id, name:name};
+        
+        group.on('moving', () => {
+            if(type === 'valve') handleValveDrag(group);
+            else updateLines(group);
+        });
+        group.on('mouseup', () => { 
+            if(type === 'valve') handleValveDrag(group, true);
+            organizeLayers(); 
+            saveState(); 
+        });
+
+        canvas.add(group);
+        organizeLayers(); 
+        return group;
+    }
+
+    // --- DUTOS ---
+    function createDuct(x, y, loadId=null, loadName=null) {
+        const id = loadId || ('L' + ductSeq++);
+        const name = loadName || id;
+
+        // IMPORTANTE: selectable: true permite selecionar o item para deletar, 
+        // mas lockMovement trava o arrasto, forçando o uso dos pontos vermelhos.
+        const line = new fabric.Line([x-50,y,x+50,y], {
+            stroke:'#555', strokeWidth:3, 
+            selectable:true, hasControls:false, lockMovementX:true, lockMovementY:true, 
+            hoverCursor: 'pointer', originX:'left', originY:'top'
+        });
+
+        const p1 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x-50, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
+        const p2 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x+50, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
+        const head = new fabric.Triangle({width:10, height:10, fill:'#555', originX:'center', originY:'center', selectable:false, evented:false});
+        const label = new fabric.Text(name, {fontSize:11, fill:'#e67e22', backgroundColor:'#fff', originX:'center', originY:'center', selectable:false, evented:false});
+
+        const sharedData = {type:'duct', id, name, line, head, label, p1Obj: p1, p2Obj: p2};
+        p1.data = {isAnchor:true, parent: sharedData, pointIndex: 1};
+        p2.data = {isAnchor:true, parent: sharedData, pointIndex: 2};
+        line.data = sharedData;
+
+        const update = () => {
+            line.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top });
+            line.setCoords(); 
+            const dx = p2.left - p1.left; const dy = p2.top - p1.top;
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            head.set({left: p2.left, top: p2.top, angle: angle + 90});
+            label.set({left: (p1.left+p2.left)/2, top: (p1.top+p2.top)/2 - 15});
+            updateAttachedValves(id, p1, p2);
+        };
+
+        p1.on('moving', () => { update(); canvas.renderAll(); });
+        p2.on('moving', () => { update(); canvas.renderAll(); });
+        p1.on('modified', () => { checkSnap(p1); update(); organizeLayers(); saveState(); });
+        p2.on('modified', () => { checkSnap(p2); update(); organizeLayers(); saveState(); });
+
+        canvas.add(line, head, label, p1, p2);
+        organizeLayers(); 
+        return line;
+    }
+
+    function updateLines(g) {
+        const m = g.calcTransformMatrix();
+        const ports = {}; 
+        g.getObjects().forEach(o => { if(o.portId!==undefined) ports[o.portId] = fabric.util.transformPoint(new fabric.Point(o.left, o.top), m); });
+
+        canvas.getObjects('circle').forEach(p => {
+            if(p.data?.isAnchor && p.data.linkedNode === g.data.id) {
+                const pos = ports[p.data.linkedPort || 0];
+                if(pos) {
+                    p.set({left: pos.x, top: pos.y});
+                    p.setCoords();
+                    const ductData = p.data.parent;
+                    ductData.line.set({ x1: ductData.p1Obj.left, y1: ductData.p1Obj.top, x2: ductData.p2Obj.left, y2: ductData.p2Obj.top });
+                    const dx = ductData.p2Obj.left - ductData.p1Obj.left;
+                    const dy = ductData.p2Obj.top - ductData.p1Obj.top;
+                    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                    ductData.head.set({left: ductData.p2Obj.left, top: ductData.p2Obj.top, angle: angle + 90});
+                    ductData.label.set({left: (ductData.p1Obj.left+ductData.p2Obj.left)/2, top: (ductData.p1Obj.top+ductData.p2Obj.top)/2 - 15});
+                    updateAttachedValves(ductData.id, ductData.p1Obj, ductData.p2Obj);
+                }
+            }
+        });
+        canvas.renderAll();
+    }
+
+    // --- VÁLVULAS ---
+    function handleValveDrag(valve, isDrop=false) {
+        const center = valve.getCenterPoint();
+        let closestDist = SNAP_DISTANCE; 
+        let targetLine = null; let bestInfo = null;
+
+        canvas.getObjects('line').forEach(l => {
+            if(!l.data || l.data.type !== 'duct') return;
+            const A = {x: l.x1, y: l.y1}; const B = {x: l.x2, y: l.y2}; const P = {x: center.x, y: center.y};
+            const ABx = B.x - A.x; const ABy = B.y - A.y; const APx = P.x - A.x; const APy = P.y - A.y;
+            const len2 = ABx*ABx + ABy*ABy; let t = (APx * ABx + APy * ABy) / len2;
+            t = Math.max(0, Math.min(1, t)); 
+            const projX = A.x + t * ABx; const projY = A.y + t * ABy;
+            const dist = Math.hypot(P.x - projX, P.y - projY);
+
+            if(dist < closestDist) {
+                closestDist = dist; targetLine = l;
+                bestInfo = {x: projX, y: projY, t: t, angle: Math.atan2(ABy, ABx) * 180 / Math.PI};
+            }
+        });
+
+        if(targetLine && bestInfo) {
+            const angleRad = bestInfo.angle * Math.PI / 180;
+            const perpX = Math.cos(angleRad + Math.PI/2); const perpY = Math.sin(angleRad + Math.PI/2);
+            const finalX = bestInfo.x + (VALVE_CENTER_OFFSET * perpX);
+            const finalY = bestInfo.y + (VALVE_CENTER_OFFSET * perpY);
+
+            valve.set({left: finalX, top: finalY, angle: bestInfo.angle});
+            valve.item(0).set('stroke', '#27ae60'); 
+            valve.data.attachedDuctId = targetLine.data.id;
+            valve.data.ratio = bestInfo.t;
+        } else {
+            if(isDrop) {
+                valve.data.attachedDuctId = null;
+                valve.item(0).set('stroke', '#d35400');
+                valve.set({angle: 0});
+            }
+        }
+    }
+
+    function updateAttachedValves(ductId, p1, p2) {
+        const dx = p2.left - p1.left; const dy = p2.top - p1.top;
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        const angleRad = angle * Math.PI / 180;
+        const perpX = Math.cos(angleRad + Math.PI/2); const perpY = Math.sin(angleRad + Math.PI/2);
+
+        canvas.getObjects('group').forEach(g => {
+            if(g.data && g.data.type === 'valve' && g.data.attachedDuctId === ductId) {
+                const ratio = g.data.ratio || 0.5;
+                const lineX = p1.left + ratio * dx; const lineY = p1.top + ratio * dy;
+                const finalX = lineX + (VALVE_CENTER_OFFSET * perpX);
+                const finalY = lineY + (VALVE_CENTER_OFFSET * perpY);
+                g.set({left: finalX, top: finalY, angle: angle});
+                g.setCoords();
+            }
+        });
+        organizeLayers();
+    }
+
+    // --- SAVE/LOAD ---
+    function saveState() {
+        const data = getModel();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    window.clearAll = function() {
+        if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+    };
     function getModel() {
-        const nodes = canvas.getObjects('group').map(o=>({id:o.data.id, name:o.data.name, type:o.data.subType, x:o.left, y:o.top}));
+        const nodes = canvas.getObjects('group').map(o=>({
+            id: o.data.id, name: o.data.name, type: o.data.subType, 
+            x: o.left, y: o.top,
+            attachedTo: o.data.attachedDuctId, ratio: o.data.ratio
+        }));
         const ducts = canvas.getObjects('line').map(l=>({
-            id:l.data.id, name:l.data.name, 
-            start_id:l.data.p1.data.linkedNode, end_id:l.data.p2.data.linkedNode,
-            start_port:l.data.p1.data.linkedPort||0, end_port:l.data.p2.data.linkedPort||0
+            id: l.data.id, name: l.data.name, 
+            start_id: l.data.p1Obj.data.linkedNode, end_id: l.data.p2Obj.data.linkedNode,
+            start_port: l.data.p1Obj.data.linkedPort||0, end_port: l.data.p2Obj.data.linkedPort||0
         }));
         return {nodes, ducts};
     }
-
-    // Funções Globais (chamadas pelo layout.html)
-    window.saveLocal = function() {
-        const blob = new Blob([JSON.stringify(getModel(), null, 2)], {type: "application/json"});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `malha_${Date.now()}.json`;
-        a.click();
-    };
-
-    window.saveToPython = async function() {
-        setStatus("Salvando...");
-        await fetch('/api/mesh-db', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(getModel())});
-        setStatus("Salvo no Servidor."); alert("Salvo!");
-    };
-
-    window.loadLocal = function(e) {
-        const r = new FileReader();
-        r.onload = ev => { reconstruct(JSON.parse(ev.target.result)); e.target.value=''; };
-        if(e.target.files[0]) r.readAsText(e.target.files[0]);
-    };
-
-    // Recarregar do Servidor ao abrir
-    fetch('/api/get-mesh').then(r=>r.json()).then(reconstruct);
-
     function reconstruct(data) {
         canvas.clear(); canvas.setBackgroundColor('#fff');
-        let maxN=0, maxD=0;
-        
+        let maxN=0, maxD=0, maxV=0;
         data.nodes.forEach(n => {
-            const num = parseInt(n.id.replace(/\D/g, ''))||0; if(num>maxN) maxN=num;
+            const num = parseInt(n.id.replace(/\D/g, ''))||0;
+            if(n.type==='valve') { if(num>maxV) maxV=num; } else { if(num>maxN) maxN=num; }
             createEq(n.x, n.y, n.type, n.id, n.name);
         });
-
         data.ducts.forEach(d => {
             const num = parseInt(d.id.replace(/\D/g, ''))||0; if(num>maxD) maxD=num;
-            const l = createDuct(0,0,d.id,d.name);
+            const line = createDuct(0,0,d.id,d.name);
             const link = (p, nid, pid) => {
                 if(!nid) return;
                 const g = canvas.getObjects('group').find(x=>x.data.id===nid);
                 if(g) {
-                    const m = g.calcTransformMatrix();
-                    const port = g.getObjects().find(o=>o.portId===pid);
+                    const m = g.calcTransformMatrix(); const port = g.getObjects().find(o=>o.portId===pid);
                     if(port) {
                         const gp = fabric.util.transformPoint(new fabric.Point(port.left,port.top), m);
                         p.set({left:gp.x, top:gp.y, fill:'#27ae60'}); p.data.linkedNode=nid; p.data.linkedPort=pid;
                     }
                 }
             };
-            link(l.data.p1, d.start_id, d.start_port);
-            link(l.data.p2, d.end_id, d.end_port);
-            // Trigger visual update
-            const p1=l.data.p1, p2=l.data.p2; 
-            l.set({x1:p1.left, y1:p1.top, x2:p2.left, y2:p2.top}); l.setCoords();
-            const angle = Math.atan2(p2.top-p1.top, p2.left-p1.left) * 180 / Math.PI;
-            l.data.head.set({left:p2.left, top:p2.top, angle:angle+90});
-            l.data.label.set({left:(p1.left+p2.left)/2, top:(p1.top+p2.top)/2-15});
+            link(line.data.p1Obj, d.start_id, d.start_port);
+            link(line.data.p2Obj, d.end_id, d.end_port);
+            line.data.p1Obj.fire('moving'); 
         });
-        nodeSeq=maxN+1; ductSeq=maxD+1; canvas.renderAll();
+        data.nodes.filter(n => n.type === 'valve' && n.attachedTo).forEach(v => {
+            const grp = canvas.getObjects('group').find(x=>x.data.id===v.id);
+            const ln = canvas.getObjects('line').find(x=>x.data.id===v.attachedTo);
+            if(grp && ln) {
+                grp.data.attachedDuctId = v.attachedTo; grp.data.ratio = v.ratio;
+                grp.item(0).set('stroke', '#27ae60');
+                updateAttachedValves(ln.data.id, ln.data.p1Obj, ln.data.p2Obj);
+            }
+        });
+        nodeSeq=maxN+1; ductSeq=maxD+1; valveSeq=maxV+1; 
+        setTimeout(organizeLayers, 100); canvas.renderAll();
     }
-    
-    // Duplo clique
     canvas.on('mouse:dblclick', e => {
         if(!e.target) return;
         const t = e.target.group || e.target;
         if(t.data) {
             const n = prompt("Renomear:", t.data.name);
-            if(n) { t.data.name=n; (t.data.labelObj||t.data.label).set({text:n}); canvas.renderAll(); }
+            if(n) { t.data.name=n; const textObj = t.getObjects().find(o => o.type === 'text'); if(textObj) textObj.set({text: n}); canvas.renderAll(); saveState(); }
         }
     });
+
+    // Iniciar
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved) reconstruct(JSON.parse(saved));
 </script>
 {% endblock %}
