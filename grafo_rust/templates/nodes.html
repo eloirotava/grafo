@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+    .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
+    h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 20px; }
+    
+    /* Estilo de Tabela Profissional */
+    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; }
+    .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    .data-table th { background-color: #f8f9fa; font-weight: 600; color: #444; border-bottom: 2px solid #ddd; }
+    .data-table tr:hover { background-color: #f1f1f1; }
+    
+    /* Inputs dentro da tabela */
+    .input-cell { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3px; }
+    .type-badge { background-color: #3498db; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; text-transform: uppercase; }
+    
+    .coord { font-family: monospace; color: #666; font-size: 0.9em; }
+</style>
+
+<div class="page-content">
+    <h2>Configuração de Nós (Junções e Tanques)</h2>
+    <p style="color: #666; margin-bottom: 20px;">Defina as condições de contorno (Pressão e Elevação) para os pontos de conexão.</p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 15%;">Tag (Nome)</th>
+                <th style="width: 10%;">Tipo</th>
+                <th style="width: 20%;">Coordenadas (Canvas)</th>
+                <th style="width: 20%;">Elevação (m)</th>
+                <th style="width: 20%;">Pressão Inicial (bar)</th>
+                <th style="width: 15%;">Tipo de Fronteira</th>
+            </tr>
+        </thead>
+        <tbody id="nodes-body">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    fetch('/api/get-mesh').then(r => r.json()).then(data => {
+        const tbody = document.getElementById('nodes-body');
+        
+        // Filtra APENAS o que é 'node' (exclui bombas, compressores, etc)
+        const nodes = data.nodes.filter(n => n.type === 'node');
+
+        nodes.forEach(n => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td><strong>${n.name}</strong></td>
+                <td><span class="type-badge">Nó/Tanque</span></td>
+                <td class="coord">X: ${Math.round(n.x)}, Y: ${Math.round(n.y)}</td>
+                <td><input type="number" class="input-cell" value="0.0" placeholder="0.0"></td>
+                <td><input type="number" class="input-cell" value="1.01" placeholder="atm"></td>
+                <td>
+                    <select class="input-cell">
+                        <option>Interno</option>
+                        <option>Fonte (Source)</option>
+                        <option>Sumidouro (Sink)</option>
+                    </select>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (nodes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#888;">Nenhum nó simples encontrado. Adicione "Nó" na tela de Canvas.</td></tr>';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    .report-container { display: flex; flex-direction: column; width: 100%; padding: 20px; background: #eef1f5; }
+    .kpi-row { display: flex; gap: 20px; margin-bottom: 20px; }
+    .card { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); flex: 1; display: flex; flex-direction: column; align-items: center; }
+    .card h3 { margin: 0; font-size: 14px; color: #777; text-transform: uppercase; }
+    .card .value { font-size: 28px; font-weight: bold; color: #333; margin-top: 10px; }
+    
+    .chart-row { display: flex; gap: 20px; flex-grow: 1; }
+    .chart-box { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); flex: 1; position: relative; }
+</style>
+
+<div class="report-container">
+    <div class="kpi-row">
+        <div class="card">
+            <h3>Vazão Total de Saída</h3>
+            <div class="value">1,250 m³/d</div>
+        </div>
+        <div class="card">
+            <h3>Pressão Média</h3>
+            <div class="value">45.2 bar</div>
+        </div>
+        <div class="card">
+            <h3>Perda de Carga Total</h3>
+            <div class="value">12.8 bar</div>
+        </div>
+        <div class="card">
+            <h3>Temperatura Final</h3>
+            <div class="value">65 °C</div>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-box">
+            <h4 style="margin-top: 0;">Perfil de Pressão (P vs Distância)</h4>
+            <canvas id="pressureChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <h4 style="margin-top: 0;">Vazão nos Dutos</h4>
+            <canvas id="flowChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Exemplo de Gráficos com Chart.js
+    const ctx1 = document.getElementById('pressureChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: ['0m', '100m', '200m', '300m', '400m', '500m'],
+            datasets: [{
+                label: 'Pressão (bar)',
+                data: [100, 95, 88, 80, 72, 65],
+                borderColor: '#0078d7',
+                tension: 0.3
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    const ctx2 = document.getElementById('flowChart').getContext('2d');
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: ['Duto A', 'Duto B', 'Duto C', 'Duto D'],
+            datasets: [{
+                label: 'Vazão (m³/d)',
+                data: [500, 750, 400, 850],
+                backgroundColor: '#27ae60'
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+</script>
+{% endblock %}

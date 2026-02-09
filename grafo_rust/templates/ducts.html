@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+    .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
+    h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background-color: #f8f9fa; font-weight: 600; color: #555; }
+    input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px; }
+    .status-ok { color: green; font-weight: bold; }
+    .status-warn { color: orange; font-weight: bold; }
+</style>
+
+<div class="page-content">
+    <h2>Configuração de Tubulação (Dutos)</h2>
+    <p>Defina as propriedades físicas para o cálculo hidráulico.</p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Nome (Tag)</th>
+                <th>Origem > Destino</th>
+                <th>Diâmetro (pol)</th>
+                <th>Comprimento (m)</th>
+                <th>Rugosidade (mm)</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    fetch('/api/get-mesh').then(r => r.json()).then(data => {
+        const tbody = document.getElementById('table-body');
+        
+        data.ducts.forEach(d => {
+            const tr = document.createElement('tr');
+            
+            // Lógica simples para mostrar de onde vem para onde vai
+            const from = d.start_id ? d.start_id : '?';
+            const to = d.end_id ? d.end_id : '?';
+            const status = (d.start_id && d.end_id) ? '<span class="status-ok">Conectado</span>' : '<span class="status-warn">Aberto</span>';
+
+            tr.innerHTML = `
+                <td><strong>${d.name}</strong></td>
+                <td>${from} &rarr; ${to}</td>
+                <td><input type="number" value="4"></td>
+                <td><input type="number" value="100"></td>
+                <td><input type="number" value="0.045"></td>
+                <td>${status}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if(data.ducts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum duto desenhado no Canvas.</td></tr>';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+[package]
+name = "grafo_termux"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Servidor Web (Leve como uma pena)
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+
+# Templates (Compila seu HTML para dentro do binário)
+askama = "0.12"
+askama_axum = "0.4"
+
+# JSON e Serialização
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Banco de Dados (SQLite embutido)
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "tls-native-tls"] }
+
+# Para servir arquivos estáticos se precisar
+tower-http = { version = "0.5", features = ["fs"] }
