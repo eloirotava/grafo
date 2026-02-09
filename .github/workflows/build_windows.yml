@@ -1,0 +1,39 @@
+name: Build Windows Exe
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Permite clicar no botão "Run" manualmente
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc
+
+    - name: Compilar para Windows (Estático)
+      working-directory: ./grafo_rust
+      run: |
+        # O pulo do gato: crt-static faz o exe rodar em qualquer Windows sem instalar nada extra
+        $env:RUSTFLAGS="-C target-feature=+crt-static"
+        cargo build --release --target x86_64-pc-windows-msvc
+
+    - name: Listar arquivos (Debug)
+      working-directory: ./grafo_rust
+      run: ls target/x86_64-pc-windows-msvc/release/
+
+    - name: Upload do Executável (Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: RotavaFlow-Windows
+        path: grafo_rust/target/x86_64-pc-windows-msvc/release/grafo_termux.exe
