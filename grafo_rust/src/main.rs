@@ -10,38 +10,20 @@ use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::net::SocketAddr;
 
-// --- ESTRUTURAS DE DADOS (Igual ao seu app.py) ---
+// --- DADOS ---
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-struct Node {
-    id: String,
-    name: String,
-    #[serde(rename = "type")] // JSON usa "type"
-    #[sqlx(rename = "type")]  // Banco usa "type"
-    tipo: String,             // Rust usa "tipo" (type é reservado)
-    x: f64,
-    y: f64,
-}
+struct Node { id: String, name: String, #[sqlx(rename = "type")] tipo: String, x: f64, y: f64 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-struct Duct {
-    id: String,
-    name: String,
-    start_id: Option<String>,
-    end_id: Option<String>,
-    start_port: i32,
-    end_port: i32,
-}
+struct Duct { id: String, name: String, start_id: Option<String>, end_id: Option<String>, start_port: i32, end_port: i32 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct MeshData {
-    nodes: Vec<Node>,
-    ducts: Vec<Duct>,
-}
+struct MeshData { nodes: Vec<Node>, ducts: Vec<Duct> }
 
-// --- TEMPLATES (A Mágica da Compilação) ---
-// ATENÇÃO: Use ASPAS DUPLAS nos caminhos!
+// --- TEMPLATES (Registrando TODAS as telas) ---
+// O campo 'title' é obrigatório porque o layout.html usa ele.
 #[derive(Template)]
-#[template(path = "home.html")] 
+#[template(path = "home.html")]
 struct HomeTemplate { title: String }
 
 #[derive(Template)]
@@ -72,35 +54,20 @@ struct ReportsTemplate { title: String }
 #[template(path = "help.html")]
 struct HelpTemplate { title: String }
 
-// --- ESTADO DO APP ---
+// --- ESTADO ---
 #[derive(Clone)]
-struct AppState {
-    pool: SqlitePool,
-}
+struct AppState { pool: SqlitePool }
 
 #[tokio::main]
 async fn main() {
-    // Conecta no SQLite (cria o arquivo se não existir)
     let db_url = "sqlite://mesh.sqlite?mode=rwc";
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5) // Poucas conexões pra não estourar o Termux
-        .connect(db_url)
-        .await
-        .expect("Erro ao conectar no SQLite");
+    let pool = SqlitePoolOptions::new().connect(db_url).await.unwrap();
 
-    // Cria tabelas na inicialização
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT, type TEXT, x REAL, y REAL);
-         CREATE TABLE IF NOT EXISTS ducts (id TEXT PRIMARY KEY, name TEXT, start_id TEXT, end_id TEXT, start_port INTEGER, end_port INTEGER);"
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT, type TEXT, x REAL, y REAL)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE TABLE IF NOT EXISTS ducts (id TEXT PRIMARY KEY, name TEXT, start_id TEXT, end_id TEXT, start_port INTEGER, end_port INTEGER)").execute(&pool).await.unwrap();
 
-    let state = AppState { pool };
-
-    // Rotas (Igualzinho ao FastAPI)
     let app = Router::new()
+        // --- ROTAS DAS PÁGINAS ---
         .route("/", get(home))
         .route("/canvas", get(canvas))
         .route("/nodes", get(nodes))
@@ -109,18 +76,18 @@ async fn main() {
         .route("/simulation", get(sim))
         .route("/reports", get(reports))
         .route("/help", get(help))
-        .route("/api/get-mesh", get(get_mesh_api))
-        .route("/api/mesh-db", post(save_mesh_api))
-        .with_state(state);
+        // --- API ---
+        .route("/api/get-mesh", get(get_mesh))
+        .route("/api/mesh-db", post(save_mesh))
+        .with_state(AppState { pool });
 
-    // Roda na porta 8000
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     println!("☢️  SERVER ONLINE: http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- HANDLERS (Views) ---
+// --- HANDLERS (Cada um chama seu Template) ---
 async fn home() -> impl IntoResponse { HomeTemplate { title: "Início".to_string() } }
 async fn canvas() -> impl IntoResponse { CanvasTemplate { title: "Editor P&ID".to_string() } }
 async fn nodes() -> impl IntoResponse { NodesTemplate { title: "Nós".to_string() } }
@@ -130,33 +97,19 @@ async fn sim() -> impl IntoResponse { SimTemplate { title: "Simulação".to_stri
 async fn reports() -> impl IntoResponse { ReportsTemplate { title: "Relatórios".to_string() } }
 async fn help() -> impl IntoResponse { HelpTemplate { title: "Ajuda".to_string() } }
 
-// --- API (JSON) ---
-async fn get_mesh_api(State(state): State<AppState>) -> Json<MeshData> {
-    let nodes = sqlx::query_as::<_, Node>("SELECT * FROM nodes")
-        .fetch_all(&state.pool).await.unwrap_or_default();
-    let ducts = sqlx::query_as::<_, Duct>("SELECT * FROM ducts")
-        .fetch_all(&state.pool).await.unwrap_or_default();
+// --- API HANDLERS ---
+async fn get_mesh(State(s): State<AppState>) -> Json<MeshData> {
+    let nodes = sqlx::query_as::<_, Node>("SELECT * FROM nodes").fetch_all(&s.pool).await.unwrap_or_default();
+    let ducts = sqlx::query_as::<_, Duct>("SELECT * FROM ducts").fetch_all(&s.pool).await.unwrap_or_default();
     Json(MeshData { nodes, ducts })
 }
 
-async fn save_mesh_api(State(state): State<AppState>, Json(payload): Json<MeshData>) -> impl IntoResponse {
-    let mut tx = state.pool.begin().await.unwrap();
-    
-    // Limpa tudo e regrava (Simples e brutal, funciona bem pra grafos pequenos)
+async fn save_mesh(State(s): State<AppState>, Json(p): Json<MeshData>) -> impl IntoResponse {
+    let mut tx = s.pool.begin().await.unwrap();
     sqlx::query("DELETE FROM nodes").execute(&mut *tx).await.unwrap();
     sqlx::query("DELETE FROM ducts").execute(&mut *tx).await.unwrap();
-
-    for n in payload.nodes {
-        sqlx::query("INSERT INTO nodes VALUES (?, ?, ?, ?, ?)")
-            .bind(n.id).bind(n.name).bind(n.tipo).bind(n.x).bind(n.y)
-            .execute(&mut *tx).await.unwrap();
-    }
-    for d in payload.ducts {
-        sqlx::query("INSERT INTO ducts VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(d.id).bind(d.name).bind(d.start_id).bind(d.end_id).bind(d.start_port).bind(d.end_port)
-            .execute(&mut *tx).await.unwrap();
-    }
-    
+    for n in p.nodes { sqlx::query("INSERT INTO nodes VALUES (?,?,?,?,?)").bind(n.id).bind(n.name).bind(n.tipo).bind(n.x).bind(n.y).execute(&mut *tx).await.unwrap(); }
+    for d in p.ducts { sqlx::query("INSERT INTO ducts VALUES (?,?,?,?,?,?)").bind(d.id).bind(d.name).bind(d.start_id).bind(d.end_id).bind(d.start_port).bind(d.end_port).execute(&mut *tx).await.unwrap(); }
     tx.commit().await.unwrap();
     (StatusCode::OK, Json(serde_json::json!({"status": "ok"})))
 }

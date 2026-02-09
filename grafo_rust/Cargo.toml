@@ -4,20 +4,28 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Servidor Web (Leve como uma pena)
+# Web Framework
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
 
-# Templates (Compila seu HTML para dentro do binário)
+# Template Engine (HTML compilado)
 askama = "0.12"
 askama_axum = "0.4"
 
-# JSON e Serialização
+# JSON
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Banco de Dados (SQLite embutido)
-sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "tls-native-tls"] }
+# Banco de Dados (SEM TLS para facilitar o estático)
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio"] }
 
-# Para servir arquivos estáticos se precisar
+# Arquivos estáticos (caso precise no futuro)
 tower-http = { version = "0.5", features = ["fs"] }
+
+# Otimização de Tamanho (Release Profile)
+[profile.release]
+strip = true  # Arranca símbolos (strip automático)
+opt-level = "z"  # Otimiza para Tamanho (Size) em vez de Velocidade máxima
+lto = true    # Link Time Optimization (Remove código morto de libs)
+codegen-units = 1 # Otimiza melhor (demora um pouco mais pra compilar)
+panic = "abort" # Remove lógica de "unwind" de erro (mais leve)
