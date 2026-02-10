@@ -64,6 +64,10 @@ async fn main() {
     let db_url = "sqlite://mesh.sqlite?mode=rwc";
     let pool = SqlitePoolOptions::new().connect(db_url).await.unwrap();
 
+    let current_dir = std::env::current_dir().unwrap();
+    println!("📂 O Rust está rodando na pasta: {}", current_dir.display());
+    println!("   Ele vai procurar 'static' em: {}/static", current_dir.display());
+
     sqlx::query("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT, type TEXT, x REAL, y REAL)").execute(&pool).await.unwrap();
     sqlx::query("CREATE TABLE IF NOT EXISTS ducts (id TEXT PRIMARY KEY, name TEXT, start_id TEXT, end_id TEXT, start_port INTEGER, end_port INTEGER)").execute(&pool).await.unwrap();
 
