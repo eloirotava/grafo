@@ -1,15 +1,15 @@
 use axum::{
-    extract::{Json, State},
-    http::StatusCode,
+    extract::{Json, Path, State},
+    http::{header, StatusCode, Uri},
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
 use askama::Template;
+use rust_embed::RustEmbed; // <--- BIBLIOTECA NOVA
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::net::SocketAddr;
-use tower_http::services::ServeDir;
 
 // --- DADOS ---
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -21,8 +21,14 @@ struct Duct { id: String, name: String, start_id: Option<String>, end_id: Option
 #[derive(Debug, Serialize, Deserialize)]
 struct MeshData { nodes: Vec<Node>, ducts: Vec<Duct> }
 
+// --- ARQUIVOS ESTÁTICOS EMBUTIDOS ---
+// Isso diz ao Rust: "Na hora de compilar, vá na pasta 'static', 
+// leia tudo e guarde os bytes dentro do executável final".
+#[derive(RustEmbed)]
+#[folder = "static"]
+struct Assets;
+
 // --- TEMPLATES (Registrando TODAS as telas) ---
-// O campo 'title' é obrigatório porque o layout.html usa ele.
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate { title: String }
@@ -64,10 +70,7 @@ async fn main() {
     let db_url = "sqlite://mesh.sqlite?mode=rwc";
     let pool = SqlitePoolOptions::new().connect(db_url).await.unwrap();
 
-    let current_dir = std::env::current_dir().unwrap();
-    println!("📂 O Rust está rodando na pasta: {}", current_dir.display());
-    println!("   Ele vai procurar 'static' em: {}/static", current_dir.display());
-
+    // Cria as tabelas se não existirem
     sqlx::query("CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT, type TEXT, x REAL, y REAL)").execute(&pool).await.unwrap();
     sqlx::query("CREATE TABLE IF NOT EXISTS ducts (id TEXT PRIMARY KEY, name TEXT, start_id TEXT, end_id TEXT, start_port INTEGER, end_port INTEGER)").execute(&pool).await.unwrap();
 
@@ -84,16 +87,34 @@ async fn main() {
         // --- API ---
         .route("/api/get-mesh", get(get_mesh))
         .route("/api/mesh-db", post(save_mesh))
-        .nest_service("/static", ServeDir::new("static"))
+        // --- ROTA DE ARQUIVOS ESTÁTICOS (MÁGICA AQUI) ---
+        // O *file pega qualquer caminho, tipo "js/fabric.min.js"
+        .route("/static/*file", get(static_handler)) 
         .with_state(AppState { pool });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     println!("☢️  SERVER ONLINE: http://{}", addr);
+    println!("📦 Modo Monólito: Arquivos estáticos estão embutidos no EXE.");
+    
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- HANDLERS (Cada um chama seu Template) ---
+// --- HANDLER DE ARQUIVOS ESTÁTICOS ---
+async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
+    let path = path.trim_start_matches('/');
+    
+    match Assets::get(path) {
+        Some(content) => {
+            // Descobre se é JS, CSS, PNG, etc automaticamente
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+// --- HANDLERS DE PÁGINAS ---
 async fn home() -> impl IntoResponse { HomeTemplate { title: "Início".to_string() } }
 async fn canvas() -> impl IntoResponse { CanvasTemplate { title: "Editor P&ID".to_string() } }
 async fn nodes() -> impl IntoResponse { NodesTemplate { title: "Nós".to_string() } }
