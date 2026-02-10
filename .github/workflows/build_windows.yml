@@ -1,8 +1,6 @@
 name: Build Windows Exe
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch: # Permite clicar no botão "Run" manualmente
 
 env:
