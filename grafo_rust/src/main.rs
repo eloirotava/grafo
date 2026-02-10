@@ -9,6 +9,7 @@ use askama::Template;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::net::SocketAddr;
+use tower_http::services::ServeDir;
 
 // --- DADOS ---
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -79,6 +80,7 @@ async fn main() {
         // --- API ---
         .route("/api/get-mesh", get(get_mesh))
         .route("/api/mesh-db", post(save_mesh))
+        .nest_service("/static", ServeDir::new("static"))
         .with_state(AppState { pool });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
