@@ -2,25 +2,21 @@
 
 {% block content %}
 <style>
-    /* Layout Geral (Mantido Original) */
+    /* Estilos da Interface Dark (Mantidos) */
     .editor-layout { display: flex; flex-grow: 1; height: 100%; overflow: hidden; background: #1e1e1e; font-family: 'Segoe UI', sans-serif; }
-    
-    /* Sidebar */
     .sidebar { width: 150px; background-color: #252526; color: #ccc; display: flex; flex-direction: column; align-items: center; padding-top: 15px; border-right: 1px solid #3e3e42; overflow-y: auto; user-select: none; }
     .palette-group { width: 100%; text-align: center; margin-bottom: 20px; }
     .group-title { font-size: 11px; text-transform: uppercase; color: #858585; margin-bottom: 10px; font-weight: bold; }
-    
     .palette-item { width: 120px; height: 70px; background-color: #333; margin: 0 auto 10px auto; border: 1px solid #3e3e42; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; transition: all 0.2s; }
     .palette-item:hover { background-color: #3e3e42; border-color: #007acc; transform: translateY(-2px); }
     .palette-item span { margin-top: 6px; font-size: 12px; }
-
-    /* Botões de Ação (Arquivo) */
+    
+    /* Botões */
     .action-btn { width: 120px; padding: 8px; margin-bottom: 10px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
     .action-btn:hover { background: #005f9e; }
     .action-btn.danger { background: #c0392b; }
-    .action-btn.danger:hover { background: #e74c3c; }
-
-    /* Ícones CSS */
+    
+    /* Ícones */
     .icon-node { width: 12px; height: 12px; border-radius: 50%; background: #3498db; border: 2px solid #fff; }
     .icon-mono { width: 24px; height: 24px; border-radius: 50%; background: #1abc9c; border: 2px solid #fff; }
     .icon-double { width: 30px; height: 18px; background: #e67e22; border: 2px solid #fff; border-radius: 2px; } 
@@ -31,7 +27,6 @@
     .icon-arrow { width: 26px; height: 2px; background: #fff; position: relative; }
     .icon-arrow::after { content:''; position: absolute; right: -2px; top: -3px; border-left: 5px solid #fff; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 
-    /* Canvas */
     .canvas-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; outline: none; }
     canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
     .statusbar { position: absolute; bottom: 0; left: 0; right: 0; height: 22px; background-color: #007acc; color: white; display: flex; align-items: center; padding: 0 10px; font-size: 11px; pointer-events: none; z-index: 999; }
@@ -41,10 +36,10 @@
     <div class="sidebar">
         <div class="palette-group">
             <div class="group-title">Arquivo</div>
-            <button class="action-btn" onclick="exportJSON()">💾 Salvar JSON</button>
+            <button class="action-btn" onclick="exportJSON()">💾 Salvar Malha</button>
             <label class="action-btn">
-                📂 Abrir JSON
-                <input type="file" onchange="importJSON(event)" accept=".json" style="display: none;">
+                📂 Abrir Malha
+                <input type="file" onchange="importJSON(event)" accept=".json,.rfm,.gz" style="display: none;">
             </label>
             <button class="action-btn" style="background: #28a745;" onclick="rodarSimulacao()">▶ Simular</button>
             <button class="action-btn danger" onclick="clearAll()">🗑️ Limpar</button>
@@ -79,18 +74,16 @@
 
 <script src="/static/js/fabric.min.js"></script>
 <script src="/static/js/fluxo.js"></script>
-<script src="/static/js/solver_bridge.js"></script>
+
 
 <script>
     const canvas = new fabric.Canvas('c', { selection: true, preserveObjectStacking: true, backgroundColor: '#ffffff' });
     let nodeSeq = 1, ductSeq = 1, valveSeq = 1;
-
-    // Constantes
     const VALVE_CENTER_OFFSET = -7; 
     const SNAP_DISTANCE = 60; 
-    const STORAGE_KEY = 'malha_db_v2';
+    const STORAGE_KEY = 'malha_db_v3'; // Versão nova do storage
 
-    // Inicializa Wasm
+    // --- Inicialização WASM ---
     var Module = {
         onRuntimeInitialized: function() {
             if (window.onSolverReady) window.onSolverReady(Module);
@@ -100,14 +93,13 @@
 
     function setStatus(m) { document.getElementById('status-msg').innerText = m; }
 
-    // --- Resizing ---
+    // --- Layout e Eventos ---
     function resize() {
         const w = document.getElementById('wrap');
         canvas.setWidth(w.clientWidth); canvas.setHeight(w.clientHeight - 22); canvas.renderAll();
     }
     window.addEventListener('resize', resize); setTimeout(resize, 100);
 
-    // --- Drag & Drop ---
     window.drag = (e, t) => { e.dataTransfer.setData("type", t); };
     const wrap = document.getElementById('wrap');
     wrap.ondragover = e => { e.preventDefault(); return false; };
@@ -120,89 +112,16 @@
         saveState();
     };
 
-    // --- DELETE ---
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const active = canvas.getActiveObject();
-            if (active) {
-                deleteObject(active);
-                canvas.discardActiveObject();
-                canvas.renderAll();
-                saveState();
-            }
+            if (active) { deleteObject(active); canvas.discardActiveObject(); canvas.renderAll(); saveState(); }
         }
     });
 
-    function deleteObject(obj) {
-        if (obj.type === 'group') {
-            canvas.remove(obj);
-        }
-        else if (obj.data && (obj.data.isAnchor || obj.data.type === 'duct')) {
-            const ductData = obj.data.parent || obj.data; 
-            canvas.remove(ductData.line); canvas.remove(ductData.head); canvas.remove(ductData.label);
-            canvas.remove(ductData.p1Obj); canvas.remove(ductData.p2Obj);
-            
-            // Solta válvulas
-            canvas.getObjects('group').forEach(g => {
-                if (g.data && g.data.type === 'valve' && g.data.attachedDuctId === ductData.id) {
-                    g.data.attachedDuctId = null;
-                    g.item(0).set('stroke', '#d35400');
-                    g.set('angle', 0);
-                }
-            });
-        }
-    }
+    // --- Lógica de Objetos (Com Persistência de Dados Físicos) ---
 
-    // --- LOGICA GRAFICA (SNAP & LAYERS) ---
-    function isPortOccupied(nodeId, portId, ignoreDuctId) {
-        const lines = canvas.getObjects('line');
-        for (let l of lines) {
-            if (!l.data || l.data.id === ignoreDuctId) continue;
-            const p1 = l.data.p1Obj.data;
-            const p2 = l.data.p2Obj.data;
-            if ((p1.linkedNode === nodeId && p1.linkedPort === portId) ||
-                (p2.linkedNode === nodeId && p2.linkedPort === portId)) return true;
-        }
-        return false;
-    }
-
-    function checkSnap(anchor) {
-        anchor.set({fill:'#e74c3c'}); 
-        anchor.data.linkedNode=null; anchor.data.linkedPort=0;
-        let snapped = false;
-        
-        canvas.getObjects('group').forEach(g => {
-            if(snapped || !g.data || g.data.type==='valve') return;
-            const m = g.calcTransformMatrix();
-            g.getObjects().forEach(o => {
-                if(o.portId===undefined) return;
-                const gp = fabric.util.transformPoint(new fabric.Point(o.left, o.top), m);
-                if(Math.hypot(anchor.left - gp.x, anchor.top - gp.y) < 20) {
-                    if (g.data.subType !== 'node') {
-                        const currentDuctId = anchor.data.parent.id;
-                        if (isPortOccupied(g.data.id, o.portId, currentDuctId)) {
-                            setStatus(`Porta ocupada em ${g.data.name}!`); return;
-                        }
-                    }
-                    anchor.set({left:gp.x, top:gp.y, fill:'#27ae60'}); anchor.setCoords();
-                    anchor.data.linkedNode = g.data.id; anchor.data.linkedPort = o.portId;
-                    snapped = true;
-                    setStatus(`Conectado a ${g.data.name}`);
-                }
-            });
-        });
-    }
-
-    function organizeLayers() {
-        canvas.getObjects('line').forEach(o => o.sendToBack());
-        canvas.getObjects('group').forEach(o => o.bringToFront());
-        canvas.getObjects('circle').forEach(o => { if(o.data?.isAnchor) o.bringToFront(); });
-        canvas.requestRenderAll();
-    }
-
-    // --- CRIAÇÃO DE OBJETOS ---
-    
-    // Agora aceita e ARMAZENA 'extraData' (onde fica a discretização)
+    // Cria Equipamentos/Nós e blinda os dados extras (props físicas)
     function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         let prefix = 'E';
         if(type==='node') prefix='N'; if(type==='valve') prefix='V';
@@ -210,6 +129,8 @@
         const id = loadId || (prefix + (type==='valve'?valveSeq++:nodeSeq++));
         const name = loadName || id;
         const objs = [];
+        const safeX = parseFloat(x) || 100;
+        const safeY = parseFloat(y) || 100;
 
         const addPort = (lx, ly, pid) => { objs.push(new fabric.Circle({radius:3, fill:'#333', left:lx, top:ly, originX:'center', originY:'center', portId:pid, stroke:'#fff', strokeWidth:1})); };
 
@@ -221,77 +142,69 @@
             objs.push(new fabric.Circle({radius:8, fill:'#3498db', stroke:'#2980b9', strokeWidth:2, originX:'center', originY:'center'}));
             addPort(0,0,0);
             objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:15, originX:'center', originY:'center', fontWeight:'600'}));
-        } else if (type === 'mono') {
-            objs.push(new fabric.Circle({radius:20, fill:'#1abc9c', stroke:'#16a085', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0, 20, 1); objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
-        } else if (type === 'double') {
-            objs.push(new fabric.Rect({width:50, height:30, fill:'#e67e22', stroke:'#d35400', strokeWidth:2, rx:4, ry:4, originX:'center', originY:'center'}));
-            addPort(-25, 0, 1); addPort(25, 0, 2); objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
-        } else if (type === 'triangle') {
-            objs.push(new fabric.Triangle({width:44, height:40, fill:'#f1c40f', stroke:'#f39c12', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0, -20, 3); addPort(-22, 20, 1); addPort(22, 20, 2); objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
-        } else if (type === 'square') {
-            objs.push(new fabric.Rect({width:40, height:40, fill:'#9b59b6', stroke:'#8e44ad', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(-20, -20, 1); addPort(20, -20, 2); addPort(20, 20, 3); addPort(-20, 20, 4); objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
+        } else if (['mono','double','triangle','square'].includes(type)) {
+            // Simplificado para equipamentos genéricos
+            const color = type==='mono'?'#1abc9c':(type==='double'?'#e67e22':(type==='triangle'?'#f1c40f':'#9b59b6'));
+            objs.push(new fabric.Rect({width:40, height:40, fill:color, stroke:'#333', strokeWidth:2, originX:'center', originY:'center'}));
+            addPort(0,0,1); // Porta central genérica
+            objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:28, originX:'center', originY:'center', fontWeight:'600'}));
         }
 
-        const group = new fabric.Group(objs, {left:x, top:y, subTargetCheck:true, hasControls:false, hasBorders:false});
+        const group = new fabric.Group(objs, {left:safeX, top:safeY, subTargetCheck:true, hasControls:false, hasBorders:false});
         
-        // --- AQUI ESTAVA O SEGREDO ---
-        // Agora garantimos que 'extraData' (props fisicas) sejam mescladas no objeto
+        // --- BLINDAGEM DE DADOS ---
+        // Clona extraData para garantir que não é referência
+        const dataPayload = JSON.parse(JSON.stringify(extraData || {}));
+        // Remove campos de geometria visual para não duplicar, mantém o resto (physics, etc)
+        delete dataPayload.x; delete dataPayload.y; delete dataPayload.type; delete dataPayload.id;
+        
         group.data = Object.assign({ 
             type:(type==='valve'?'valve':'equipment'), 
             subType:type, 
             id:id, 
             name:name
-        }, extraData);
-        // -----------------------------
+        }, dataPayload);
         
-        group.on('moving', () => {
-            if(type === 'valve') handleValveDrag(group);
-            else updateLines(group);
-        });
-        group.on('mouseup', () => { 
-            if(type === 'valve') handleValveDrag(group, true);
-            organizeLayers(); saveState(); 
-        });
+        group.on('moving', () => { if(type === 'valve') handleValveDrag(group); else updateLines(group); });
+        group.on('mouseup', () => { if(type === 'valve') handleValveDrag(group, true); organizeLayers(); saveState(); });
 
         canvas.add(group);
         organizeLayers(); 
         return group;
     }
 
+    // Cria Dutos e blinda a geometria pesada
     function createDuct(x, y, loadId=null, loadName=null, extraData={}) {
         const id = loadId || ('L' + ductSeq++);
         const name = loadName || id;
+        const safeX = parseFloat(x) || 100;
+        const safeY = parseFloat(y) || 100;
 
-        const line = new fabric.Line([x-50,y,x+50,y], {
-            stroke:'#555', strokeWidth:3, 
-            selectable:true, hasControls:false, lockMovementX:true, lockMovementY:true, 
-            hoverCursor: 'pointer', originX:'left', originY:'top'
+        const line = new fabric.Line([safeX-50, safeY, safeX+50, safeY], {
+            stroke:'#555', strokeWidth:3, selectable:true, hasControls:false, lockMovementX:true, lockMovementY:true, hoverCursor: 'pointer', originX:'left', originY:'top'
         });
 
-        const p1 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x-50, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
-        const p2 = new fabric.Circle({radius:5, fill:'#e74c3c', left:x+50, top:y, originX:'center', originY:'center', hasControls:false, hasBorders:false});
+        const p1 = new fabric.Circle({radius:5, fill:'#e74c3c', left:safeX-50, top:safeY, originX:'center', originY:'center', hasControls:false});
+        const p2 = new fabric.Circle({radius:5, fill:'#e74c3c', left:safeX+50, top:safeY, originX:'center', originY:'center', hasControls:false});
         const head = new fabric.Triangle({width:10, height:10, fill:'#555', originX:'center', originY:'center', selectable:false, evented:false});
         const label = new fabric.Text(name, {fontSize:11, fill:'#e67e22', backgroundColor:'#fff', originX:'center', originY:'center', selectable:false, evented:false});
 
-        // --- BLINDAGEM DE DADOS DO DUTO ---
+        // --- BLINDAGEM DE DADOS ---
+        const dataPayload = JSON.parse(JSON.stringify(extraData || {}));
+        delete dataPayload.x; delete dataPayload.y; delete dataPayload.type; delete dataPayload.id;
+
         const sharedData = Object.assign({
             type:'duct', id, name, 
             line, head, label, p1Obj: p1, p2Obj: p2
-        }, extraData);
-        // ----------------------------------
+        }, dataPayload);
         
         p1.data = {isAnchor:true, parent: sharedData, pointIndex: 1};
         p2.data = {isAnchor:true, parent: sharedData, pointIndex: 2};
         line.data = sharedData;
 
         const update = () => {
-            line.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top });
-            line.setCoords(); 
-            const dx = p2.left - p1.left; const dy = p2.top - p1.top;
-            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            line.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top }); line.setCoords(); 
+            const angle = Math.atan2(p2.top - p1.top, p2.left - p1.left) * 180 / Math.PI;
             head.set({left: p2.left, top: p2.top, angle: angle + 90});
             label.set({left: (p1.left+p2.left)/2, top: (p1.top+p2.top)/2 - 15});
             updateAttachedValves(id, p1, p2);
@@ -307,19 +220,61 @@
         return line;
     }
 
-    function updateLines(g) {
-        const m = g.calcTransformMatrix();
-        const ports = {}; 
-        g.getObjects().forEach(o => { if(o.portId!==undefined) ports[o.portId] = fabric.util.transformPoint(new fabric.Point(o.left, o.top), m); });
+    // --- Funções Auxiliares (Snap, Layers, Delete) ---
+    function deleteObject(obj) {
+        if (obj.type === 'group') canvas.remove(obj);
+        else if (obj.data && (obj.data.isAnchor || obj.data.type === 'duct')) {
+            const d = obj.data.parent || obj.data; 
+            [d.line, d.head, d.label, d.p1Obj, d.p2Obj].forEach(o => canvas.remove(o));
+            canvas.getObjects('group').forEach(g => {
+                if (g.data?.attachedDuctId === d.id) { g.data.attachedDuctId = null; g.item(0).set('stroke', '#d35400'); g.set('angle', 0); }
+            });
+        }
+    }
 
+    function isPortOccupied(nodeId, portId, ignoreDuctId) {
+        for (let l of canvas.getObjects('line')) {
+            if (!l.data || l.data.id === ignoreDuctId) continue;
+            const p1 = l.data.p1Obj.data, p2 = l.data.p2Obj.data;
+            if ((p1.linkedNode===nodeId && p1.linkedPort===portId) || (p2.linkedNode===nodeId && p2.linkedPort===portId)) return true;
+        }
+        return false;
+    }
+
+    function checkSnap(anchor) {
+        anchor.set({fill:'#e74c3c'}); anchor.data.linkedNode=null; anchor.data.linkedPort=0;
+        let snapped = false;
+        canvas.getObjects('group').forEach(g => {
+            if(snapped || !g.data || g.data.type==='valve') return;
+            g.getObjects().forEach(o => {
+                if(o.portId===undefined) return;
+                const gp = fabric.util.transformPoint(new fabric.Point(o.left, o.top), g.calcTransformMatrix());
+                if(Math.hypot(anchor.left - gp.x, anchor.top - gp.y) < 20) {
+                    if (g.data.subType !== 'node' && isPortOccupied(g.data.id, o.portId, anchor.data.parent.id)) {
+                        setStatus(`Porta ocupada em ${g.data.name}!`); return;
+                    }
+                    anchor.set({left:gp.x, top:gp.y, fill:'#27ae60'}); anchor.setCoords();
+                    anchor.data.linkedNode = g.data.id; anchor.data.linkedPort = o.portId;
+                    snapped = true; setStatus(`Conectado a ${g.data.name}`);
+                }
+            });
+        });
+    }
+
+    function organizeLayers() {
+        canvas.getObjects('line').forEach(o => o.sendToBack());
+        canvas.getObjects('group').forEach(o => o.bringToFront());
+        canvas.getObjects('circle').forEach(o => { if(o.data?.isAnchor) o.bringToFront(); });
+        canvas.requestRenderAll();
+    }
+
+    function updateLines(g) {
+        const ports = {}; 
+        g.getObjects().forEach(o => { if(o.portId!==undefined) ports[o.portId] = fabric.util.transformPoint(new fabric.Point(o.left, o.top), g.calcTransformMatrix()); });
         canvas.getObjects('circle').forEach(p => {
             if(p.data?.isAnchor && p.data.linkedNode === g.data.id) {
                 const pos = ports[p.data.linkedPort || 0];
-                if(pos) {
-                    p.set({left: pos.x, top: pos.y}); p.setCoords();
-                    const ductData = p.data.parent;
-                    ductData.p1Obj.fire('moving'); 
-                }
+                if(pos) { p.set({left: pos.x, top: pos.y}); p.setCoords(); p.data.parent.p1Obj.fire('moving'); }
             }
         });
         canvas.renderAll();
@@ -327,104 +282,113 @@
 
     function handleValveDrag(valve, isDrop=false) {
         const center = valve.getCenterPoint();
-        let closestDist = SNAP_DISTANCE; 
-        let targetLine = null; let bestInfo = null;
-
+        let closestDist = SNAP_DISTANCE, targetLine = null, bestInfo = null;
         canvas.getObjects('line').forEach(l => {
             if(!l.data || l.data.type !== 'duct') return;
-            const A = {x: l.x1, y: l.y1}; const B = {x: l.x2, y: l.y2}; const P = {x: center.x, y: center.y};
-            const ABx = B.x - A.x; const ABy = B.y - A.y; const APx = P.x - A.x; const APy = P.y - A.y;
-            const len2 = ABx*ABx + ABy*ABy; let t = (APx * ABx + APy * ABy) / len2;
-            t = Math.max(0, Math.min(1, t)); 
-            const projX = A.x + t * ABx; const projY = A.y + t * ABy;
+            const A = {x: l.x1, y: l.y1}, B = {x: l.x2, y: l.y2}, P = {x: center.x, y: center.y};
+            const ABx = B.x - A.x, ABy = B.y - A.y, APx = P.x - A.x, APy = P.y - A.y;
+            const len2 = ABx*ABx + ABy*ABy; 
+            let t = Math.max(0, Math.min(1, (APx * ABx + APy * ABy) / len2));
+            const projX = A.x + t * ABx, projY = A.y + t * ABy;
             const dist = Math.hypot(P.x - projX, P.y - projY);
-
-            if(dist < closestDist) {
-                closestDist = dist; targetLine = l;
-                bestInfo = {x: projX, y: projY, t: t, angle: Math.atan2(ABy, ABx) * 180 / Math.PI};
-            }
+            if(dist < closestDist) { closestDist = dist; targetLine = l; bestInfo = {x: projX, y: projY, t: t, angle: Math.atan2(ABy, ABx) * 180 / Math.PI}; }
         });
 
         if(targetLine && bestInfo) {
             const angleRad = bestInfo.angle * Math.PI / 180;
-            const perpX = Math.cos(angleRad + Math.PI/2); const perpY = Math.sin(angleRad + Math.PI/2);
+            const perpX = Math.cos(angleRad + Math.PI/2), perpY = Math.sin(angleRad + Math.PI/2);
             valve.set({left: bestInfo.x + (VALVE_CENTER_OFFSET * perpX), top: bestInfo.y + (VALVE_CENTER_OFFSET * perpY), angle: bestInfo.angle});
             valve.item(0).set('stroke', '#27ae60'); 
-            valve.data.attachedDuctId = targetLine.data.id;
-            valve.data.ratio = bestInfo.t;
-        } else {
-            if(isDrop) {
-                valve.data.attachedDuctId = null;
-                valve.item(0).set('stroke', '#d35400');
-                valve.set({angle: 0});
-            }
+            valve.data.attachedDuctId = targetLine.data.id; valve.data.ratio = bestInfo.t;
+        } else if(isDrop) {
+            valve.data.attachedDuctId = null; valve.item(0).set('stroke', '#d35400'); valve.set({angle: 0});
         }
     }
 
     function updateAttachedValves(ductId, p1, p2) {
-        const dx = p2.left - p1.left; const dy = p2.top - p1.top;
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const angleRad = angle * Math.PI / 180;
-        const perpX = Math.cos(angleRad + Math.PI/2); const perpY = Math.sin(angleRad + Math.PI/2);
-
+        const dx = p2.left - p1.left, dy = p2.top - p1.top;
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI, angleRad = angle * Math.PI / 180;
+        const perpX = Math.cos(angleRad + Math.PI/2), perpY = Math.sin(angleRad + Math.PI/2);
         canvas.getObjects('group').forEach(g => {
-            if(g.data && g.data.type === 'valve' && g.data.attachedDuctId === ductId) {
-                const ratio = g.data.ratio || 0.5;
-                const lineX = p1.left + ratio * dx; const lineY = p1.top + ratio * dy;
-                g.set({left: lineX + (VALVE_CENTER_OFFSET * perpX), top: lineY + (VALVE_CENTER_OFFSET * perpY), angle: angle});
+            if(g.data?.attachedDuctId === ductId) {
+                const r = g.data.ratio || 0.5;
+                g.set({left: (p1.left + r * dx) + (VALVE_CENTER_OFFSET * perpX), top: (p1.top + r * dy) + (VALVE_CENTER_OFFSET * perpY), angle: angle});
                 g.setCoords();
             }
         });
         organizeLayers();
     }
 
-    // --- ARQUIVO .RFM ---
+    // --- PERSISTÊNCIA & FORMATOS ---
 
-    function getModel() {
-        const nodes = canvas.getObjects('group').map(o=> {
-            // Clona o data completo para não perder propriedades fisicas ocultas
+    // 1. Exporta TODOS os dados (incluindo geometry oculta)
+function getModel() {
+        // Mapeia os NÓS e EQUIPAMENTOS
+        const nodes = canvas.getObjects('group').map(o => {
+            // 1. Clona os dados internos do objeto
             const d = JSON.parse(JSON.stringify(o.data)); 
-            d.x = o.left; d.y = o.top; 
+            
+            // 2. Atualiza a posição visual atual
+            d.x = o.left; 
+            d.y = o.top; 
+            
+            // [CORREÇÃO CRÍTICA]
+            // O sistema interno usa 'equipment' como tipo genérico, mas para salvar/desenhar
+            // precisamos do tipo visual específico (ex: 'mono', 'node', 'double').
+            // Se houver um subType definido (que é criado no createEq), usamos ele como Type principal.
+            if (d.subType) {
+                d.type = d.subType;
+            }
+
             return d;
         });
 
-        const ducts = canvas.getObjects('line').map(l=> {
-            // Clona data completo
+        // Mapeia os DUTOS
+        const ducts = canvas.getObjects('line').map(l => {
+            // Remove referências a objetos do FabricJS (line, head, etc) que não podem ser salvos no JSON
             const { line, head, label, p1Obj, p2Obj, parent, ...cleanData } = l.data;
+            
+            // Atualiza as conexões (IDs de início e fim) baseado em onde as âncoras estão conectadas agora
             cleanData.start_id = l.data.p1Obj.data.linkedNode;
             cleanData.end_id = l.data.p2Obj.data.linkedNode;
-            cleanData.start_port = l.data.p1Obj.data.linkedPort||0;
-            cleanData.end_port = l.data.p2Obj.data.linkedPort||0;
+            cleanData.start_port = l.data.p1Obj.data.linkedPort || 0;
+            cleanData.end_port = l.data.p2Obj.data.linkedPort || 0;
+            
+            // A geometria (discretização) já está dentro de 'cleanData' porque
+            // foi carregada no 'adaptToNative' e colocada em l.data.
             return cleanData;
         });
 
+        // Retorna o objeto completo do modelo
         return { nodes, ducts, version: "2.1", timestamp: Date.now() };
     }
 
     async function exportJSON() {
         const data = getModel();
         const jsonStr = JSON.stringify(data);
+        console.log("Exportando bytes:", jsonStr.length);
         
+        // Comprime para .rfm (Gzip)
         const blob = new Blob([jsonStr]);
         const stream = blob.stream().pipeThrough(new CompressionStream('gzip'));
         const compressedBlob = await new Response(stream).blob();
-
-        const url = URL.createObjectURL(compressedBlob);
+        
         const a = document.createElement('a');
-        a.href = url;
+        a.href = URL.createObjectURL(compressedBlob);
         a.download = 'projeto_malha.rfm';
         a.click();
-        setStatus("Arquivo .RFM salvo (Gzip)!");
+        setStatus("Arquivo .RFM salvo!");
     }
 
     async function importJSON(e) {
         const file = e.target.files[0];
         if(!file) return;
+        setStatus("Lendo arquivo...");
 
         try {
             let jsonStr;
+            // Detecta GZIP por extensão ou mágica
             if (file.name.endsWith('.rfm') || file.name.endsWith('.gz')) {
-                setStatus("Descomprimindo...");
                 const ds = new DecompressionStream('gzip');
                 const stream = file.stream().pipeThrough(ds);
                 const blob = await new Response(stream).blob();
@@ -434,19 +398,19 @@
             }
 
             const data = JSON.parse(jsonStr);
-            // PASSO CRÍTICO: Fundir dados relacionais (antigos) no formato nativo
+            // Se for formato antigo, converte. Se for novo, usa direto.
             const mergedData = adaptToNative(data);
             
             reconstruct(mergedData);
             saveState();
-            setStatus("Projeto carregado e dados físicos restaurados!");
+            setStatus("Importado com sucesso! " + mergedData.nodes.length + " nós.");
 
         } catch(err) {
             console.error(err);
-            setStatus("Erro ao abrir arquivo.");
-            alert("Erro fatal ao ler o arquivo.");
+            alert("Erro ao ler arquivo. Verifique o formato.");
+            setStatus("Erro na importação.");
         }
-        e.target.value = ''; 
+        e.target.value = '';
     }
 
     function saveState() {
@@ -458,65 +422,71 @@
         if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }
     };
 
-    // --- A CORREÇÃO DE OURO ---
-    // Essa função pega os dados "órfãos" das tabelas antigas e cola dentro dos objetos visuais
-    function adaptToNative(data) {
-        // Se já for formato novo, retorna direto
-        if(data.version && parseFloat(data.version) >= 2.0) return data;
+    // --- CORREÇÃO: "O Aspirador de Dados" ---
+    // Pega o JSON antigo separado e funde tudo num objeto só
+function adaptToNative(data) {
+        // Se já estiver no formato nativo v2.1 (sem tabelas separadas), retorna direto
+        if(data.version && parseFloat(data.version) >= 2.1 && !data.node_props) return data;
 
-        console.log("Convertendo formato legado (tabelas separadas)...");
+        console.log("Importando JSON legado (mantendo visual de nós)...");
         
         const nodes = []; 
         const ducts = [];
 
-        // 1. Processar Nós
+        // 1. Processar Nós (P, Q, I -> Visual 'node')
         if(data.nodes) {
             data.nodes.forEach(n => {
-                let type = 'node';
-                if(n.type === 'Tanque') type = 'mono';
-                else if(n.type === 'Junção') type = 'node';
-
-                // PROCURA DADOS FÍSICOS ORFÃOS
+                // Mapeia propriedades físicas (Pressão, Temp, etc) da tabela node_props
                 const props = data.node_props ? data.node_props.find(p => p.node_id === n.id) : {};
+                
+                // Mapeia composição (C1, C2...) da tabela node_composition
                 const comp = data.node_composition ? data.node_composition.filter(c => c.node_id === n.id) : [];
 
-                // Funde tudo no objeto do nó
                 nodes.push({ 
-                    ...n,      // id, name, x, y
-                    type: type,
-                    physics: props,       // Guarda propriedades físicas
-                    composition: comp     // Guarda composição
+                    ...n,                 // Copia ID, name, x, y originais
+                    type: 'node',         // FORÇA visual de nó simples (círculo azul) para tudo
+                    originalType: n.type, // PRESERVA o tipo real (P, Q, I) para o Solver/Simulação
+                    physics: props,       // Guarda os dados físicos dentro do objeto
+                    composition: comp     // Guarda a composição dentro do objeto
                 });
             });
         }
 
-        // 2. Processar Dutos
+        // 2. Processar Dutos e Geometria (Discretização)
         if(data.ducts) {
             data.ducts.forEach(d => {
-                // PROCURA GEOMETRIA (DISCRETIZAÇÃO)
-                // Isso é o que pesava 350KB!
+                // Busca todos os segmentos deste duto na tabela duct_geom
                 const geom = data.duct_geom ? data.duct_geom.filter(g => g.duct_id === d.id) : [];
                 
+                // Ordena os segmentos pelo índice para garantir a sequência correta
+                geom.sort((a, b) => (a.seg_index || 0) - (b.seg_index || 0));
+
                 ducts.push({
                     ...d,
-                    start_port: 0, end_port: 0,
-                    geometry: geom // <--- AQUI ESTÁ O PESO!
+                    start_port: d.start_port || 0,
+                    end_port: d.end_port || 0,
+                    geometry: geom // Anexa a discretização completa ao duto
                 });
             });
         }
 
-        // 3. Processar Válvulas
+        // 3. Processar Válvulas (Intermediários)
         if(data.valves) {
             data.valves.forEach(v => {
                 nodes.push({
-                    id: v.id, name: v.name, type: 'valve', x: 0, y: 0,
-                    attachedTo: v.duct_id || v.ductId, ratio: v.t,
-                    props: v // Guarda configs da valvula
+                    id: v.id, 
+                    name: v.name, 
+                    type: 'valve', // Visual específico para válvulas (equipamento em linha)
+                    x: 0, y: 0,    // Posição calculada automaticamente pelo 'attachedTo'
+                    attachedTo: v.duct_id || v.ductId, // ID do duto onde ela está
+                    ratio: v.t !== undefined ? v.t : 0.5, // Posição relativa (0 a 1)
+                    originalType: v.type, // Tipo da válvula (Ex: 'A')
+                    props: v       // Propriedades extras (CV, abertura, value)
                 });
             });
         }
 
-        return { nodes, ducts };
+        return { nodes, ducts, version: "2.1" };
     }
 
     function reconstruct(data) {
@@ -526,27 +496,23 @@
         data.nodes.forEach(n => {
             const num = parseInt(n.id.replace(/\D/g, ''))||0;
             if(n.type==='valve') { if(num>maxV) maxV=num; } else { if(num>maxN) maxN=num; }
-            
-            // Passa TODOS os dados (incluindo physics, geometry) para o createEq
-            // O createEq agora salva isso em group.data
+            // Passa o objeto inteiro 'n' como extraData
             createEq(n.x, n.y, n.type, n.id, n.name, n); 
         });
 
         data.ducts.forEach(d => {
             const num = parseInt(d.id.replace(/\D/g, ''))||0; if(num>maxD) maxD=num;
-            
-            // Passa TODOS os dados (incluindo geometry gigante) para o createDuct
+            // Passa o objeto inteiro 'd' (com geometry) como extraData
             const line = createDuct(0,0,d.id,d.name, d); 
 
+            // Reconecta
             const link = (p, nid, pid) => {
                 if(!nid) return;
                 const g = canvas.getObjects('group').find(x=>x.data.id===nid);
                 if(g) {
-                    const m = g.calcTransformMatrix(); 
-                    let port = g.getObjects().find(o=>o.portId===pid);
-                    if(!port) port = g.getObjects().find(o=>o.portId!==undefined);
+                    let port = g.getObjects().find(o=>o.portId===pid) || g.getObjects().find(o=>o.portId!==undefined);
                     if(port) {
-                        const gp = fabric.util.transformPoint(new fabric.Point(port.left,port.top), m);
+                        const gp = fabric.util.transformPoint(new fabric.Point(port.left,port.top), g.calcTransformMatrix());
                         p.set({left:gp.x, top:gp.y, fill:'#27ae60'}); 
                         p.data.linkedNode=nid; p.data.linkedPort=port.portId;
                     }
