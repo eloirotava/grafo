@@ -2,50 +2,37 @@
 {% block content %}
 <style>
     .page-content { padding: 30px; width: 100%; max-width: 1400px; margin: 0 auto; }
-    
     .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
     .panel { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .panel h3 { margin-top: 0; font-size: 16px; color: #0078d7; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-    
     .form-group { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
     .form-group label { font-size: 13px; font-weight: 600; color: #555; }
     .form-group input, .form-group select { width: 120px; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; text-align: right; }
-
     .sim-controls { padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd; display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
     .btn-run { background: #28a745; color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
     .btn-run:disabled { background: #ccc; cursor: not-allowed; }
-    .btn-preview { background: #6c757d; }
-    
     .status-box { padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; background: #222; color: #0f0; margin-bottom: 20px; min-height: 60px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
-    
-    /* PREVIEW TABLES */
     .preview-area { margin-bottom: 30px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
     .preview-tabs { display: flex; background: #f1f1f1; border-bottom: 1px solid #ccc; overflow-x: auto; }
-    .tab-btn { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 12px; font-weight: bold; color: #555; border-right: 1px solid #ddd; white-space: nowrap; }
+    .tab-btn { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 12px; font-weight: bold; color: #555; border-right: 1px solid #ddd; }
     .tab-btn.active { background: #fff; color: #0078d7; border-bottom: 3px solid #0078d7; margin-bottom: -1px; }
-    
     .tab-content { display: none; padding: 0; overflow: auto; max-height: 500px; }
     .tab-content.active { display: block; }
-
     .excel-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Segoe UI', sans-serif; white-space: nowrap; }
-    .excel-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 8px; text-align: left; position: sticky; top: 0; z-index: 10; font-weight: 600; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
+    .excel-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 8px; text-align: left; position: sticky; top: 0; z-index: 10; font-weight: 600; }
     .excel-table td { border: 1px solid #ddd; padding: 6px 8px; color: #333; }
-    .excel-table tr:nth-child(even) { background-color: #fcfcfc; }
     .excel-table td.num { text-align: right; font-family: 'Consolas', monospace; color: #0056b3; }
-    .excel-table td.idx { background: #eee; font-weight: bold; text-align: center; width: 40px; }
-
     .results-area { display: none; margin-top:20px; border-top: 3px solid #0078d7; padding-top:20px; }
 </style>
 
 <div class="page-content">
     <h2>Simulação (Solver WASM)</h2>
-    
     <div class="config-grid">
         <div class="panel">
             <h3>1. Controle & Convergência</h3>
-            <div class="form-group"><label>Rastreio (Track)</label><input type="number" id="inp-track" value="1"></div>
-            <div class="form-group"><label>Relaxação</label><input type="number" id="inp-relax" value="1" step="0.1"></div>
-            <div class="form-group"><label>Tolerância</label><input type="text" id="inp-tol" value="1e-3"></div>
+            <div class="form-group"><label>Rastreio (Track)</label><input type="number" id="inp-track" value="0.5" step="0.1"></div>
+            <div class="form-group"><label>Relaxação</label><input type="number" id="inp-relax" value="0.5" step="0.1"></div>
+            <div class="form-group"><label>Tolerância</label><input type="text" id="inp-tol" value="0.1"></div>
         </div>
         <div class="panel">
             <h3>2. Tempo</h3>
@@ -61,31 +48,28 @@
     </div>
 
     <div class="sim-controls">
-        <button class="btn-run btn-preview" onclick="prepararDados()">1. Carregar & Verificar Dados</button>
+        <button class="btn-run" style="background:#6c757d" onclick="prepararDados()">1. Carregar & Verificar Dados</button>
         <button id="btn-simular" class="btn-run" onclick="rodarWASM()" disabled style="opacity: 0.5;">2. Rodar Solver ▶</button>
     </div>
 
-    <div id="console-log" class="status-box">Clique em 'Carregar & Verificar' para ver as variáveis que irão para o Wrapper.</div>
+    <div id="console-log" class="status-box">Aguardando carregamento de dados...</div>
 
     <div id="preview-container" class="preview-area" style="display:none;">
         <div class="preview-tabs">
             <button class="tab-btn active" onclick="openTab('tab-dutos')">Dutos</button>
             <button class="tab-btn" onclick="openTab('tab-geom')">Geometria</button>
-            <button class="tab-btn" onclick="openTab('tab-nos')">Nós (Input)</button>
+            <button class="tab-btn" onclick="openTab('tab-nos')">Nós</button>
             <button class="tab-btn" onclick="openTab('tab-ci')">Condição Inicial</button>
-            <button class="tab-btn" onclick="openTab('tab-equip')">Equipamentos</button>
         </div>
-        
         <div id="tab-dutos" class="tab-content active"></div>
         <div id="tab-geom" class="tab-content"></div>
         <div id="tab-nos" class="tab-content"></div>
         <div id="tab-ci" class="tab-content"></div>
-        <div id="tab-equip" class="tab-content"></div>
     </div>
 
     <div id="results-area" class="results-area">
         <h3>Resultados da Simulação</h3>
-        <div id="res-table-container" style="overflow-x:auto;"></div>
+        <div id="res-table-container"></div>
     </div>
 </div>
 
@@ -95,7 +79,7 @@
 </script>
 
 <script>
-    let GLOBAL_BUILT_DATA = null; 
+    let GLOBAL_BUILT_DATA = null;
 
     function log(msg) { 
         const el = document.getElementById('console-log');
@@ -106,18 +90,17 @@
     function toggleTimeInput() {
         const mode = document.getElementById('sim-mode').value;
         const inp = document.getElementById('inp-t');
-        if (mode === 'steady') { inp.value = "1e90"; inp.disabled = true; inp.style.background = "#eee"; }
-        else { inp.value = "60"; inp.disabled = false; inp.style.background = "#fff"; }
+        inp.disabled = (mode === 'steady');
+        inp.style.background = inp.disabled ? "#eee" : "#fff";
+        if (inp.disabled) inp.value = "1e90";
     }
 
     function getNumericParams() {
-        const mode = document.getElementById('sim-mode').value;
-        const t = mode === 'steady' ? 1e90 : (parseFloat(document.getElementById('inp-t').value) || 60);
         return [
-            t, 
-            parseFloat(document.getElementById('inp-track').value) || 1,
-            parseFloat(document.getElementById('inp-relax').value) || 1,
-            parseFloat(document.getElementById('inp-tol').value) || 1e-3
+            document.getElementById('sim-mode').value === 'steady' ? 1e90 : (parseFloat(document.getElementById('inp-t').value) || 60),
+            parseFloat(document.getElementById('inp-track').value) || 0.5,
+            parseFloat(document.getElementById('inp-relax').value) || 0.5,
+            parseFloat(document.getElementById('inp-tol').value) || 0.1
         ];
     }
 
@@ -127,170 +110,111 @@
             if (!raw) throw new Error("Malha vazia!");
             const data = JSON.parse(raw);
 
-            // 1. CARREGA PROPRIEDADES DO NODE_PROPS (Merge com o desenho)
             const propsMap = new Map();
             if (data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
 
             const nodeMap = new Map();
-            const nodeNameMap = new Map(); // Para exibição apenas
+            const nodeNameMap = new Map();
 
-            // Filtra nós reais (exclui válvulas visuais) e aplica propriedades
             const nodes = (data.nodes || [])
                 .filter(n => n.type !== 'valve' && n.type !== 'A')
                 .map(n => {
                     const saved = propsMap.get(String(n.id)) || {};
-                    // IMPORTANTE: physics recebe o que foi salvo no banco (valores reais)
                     return { ...n, physics: { ...(n.physics||{}), ...saved } };
                 });
 
+            // BASE-1 (Confirmação de Dutos OK)
             nodes.forEach((n, i) => {
-                nodeMap.set(n.id, i);
-                nodeNameMap.set(n.id, n.name);
+                nodeMap.set(String(n.id), i + 1);
+                nodeNameMap.set(String(n.id), n.name);
             });
 
-            // 2. PREPARA MATRIZES
             const geometria_in = [];
             const dutos_in = [];
-            const dutos_view = []; // Apenas para exibição com nomes
+            const dutos_view = [];
             
             data.ducts.forEach(d => {
-                const segs = data.duct_geom ? data.duct_geom.filter(g => g.duct_id === d.id) : [];
+                const segs = (data.duct_geom || []).filter(g => String(g.duct_id) === String(d.id));
                 segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
                 
-                // Fallback se geometria vazia
-                if (segs.length === 0) segs.push({L:100, dy:0, D:0.1, rug:4.5e-5, U:0, aco:0, Tamb:298});
+                if (segs.length === 0) segs.push({L:100, dy:0, D:0.3937, rug:3e-5, U:50, aco:0, Tamb:313});
 
                 segs.forEach(s => {
                     geometria_in.push([
                         parseFloat(s.L||0), parseFloat(s.dy||0), parseFloat(s.D||0.1), 
-                        parseFloat(s.rug||4.5e-5), parseFloat(s.U||0), parseFloat(s.aco||0), parseFloat(s.Tamb||298)
+                        parseFloat(s.rug||4.5e-5), parseFloat(s.U||50), parseFloat(s.aco||0), parseFloat(s.Tamb||298.15)
                     ]);
                 });
                 
-                const sIdx = nodeMap.get(d.start_id);
-                const eIdx = nodeMap.get(d.end_id);
-
-                // Matriz Real para o Wrapper [Qtd, De, Para]
+                const sIdx = nodeMap.get(String(d.start_id)) || 0;
+                const eIdx = nodeMap.get(String(d.end_id)) || 0;
                 dutos_in.push([segs.length, sIdx, eIdx]);
-
-                // Matriz para Visualização (Humana)
-                dutos_view.push([
-                    d.name,
-                    segs.length,
-                    nodeNameMap.get(d.start_id) || d.start_id,
-                    nodeNameMap.get(d.end_id) || d.end_id,
-                    sIdx, eIdx
-                ]);
+                dutos_view.push([d.name, segs.length, nodeNameMap.get(String(d.start_id)), nodeNameMap.get(String(d.end_id)), sIdx, eIdx]);
             });
 
-            // 3. NÓS (Valores e Tipos)
             const nos_in = nodes.map(n => {
-                const t = n.originalType || 'I';
-                const p = n.physics || {};
-                
+                const pr = n.physics || {};
+                const type = (n.originalType || n.type || 'I').toUpperCase();
                 let val = 0;
-                // Valores já estão em SI no JSON (salvos pelo nodes.html)
-                if (t === 'P') val = p.pressure ?? 101325;
-                else if (t === 'Q') val = p.flow ?? 0;
-                else if (t === 'I') val = p.volume ?? 0;
-
-                let temp = p.temperature ?? 298.15;
-
-                return [val, temp];
+                if (type === 'P') val = parseFloat(pr.pressure || 0);
+                else if (type === 'Q') val = parseFloat(pr.flow || 0);
+                else val = parseFloat(pr.volume || 0);
+                return [val, parseFloat(pr.temperature || 298.15)];
             });
 
-            const tipos_nos_in = nodes.map(n => (n.originalType || 'I').charCodeAt(0));
+            const tipos_nos_in = nodes.map(n => (n.originalType || n.type || 'I').charCodeAt(0));
 
-            // 4. COMPOSIÇÃO
-            const compOrder = ['N2','CO2','C1','C2','C3','iC4','nC4','iC5','nC5','C6','C7','C8','C9','C10'];
+            // COMPOSIÇÃO 1-PARA-1 (Sem normalização forçada)
+            const SPECIES = ['N2', 'CO2', 'C1', 'C2', 'iC3', 'nC3', 'iC4', 'nC4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10+'];
             const composicao_nos_in = nodes.map(n => {
-                const v = new Array(14).fill(0);
-                if (n.composition) n.composition.forEach(c => {
-                    const idx = compOrder.indexOf(c.component.toUpperCase());
-                    if (idx >= 0) v[idx] = parseFloat(c.value);
+                const vec = new Array(14).fill(0);
+                const comps = (data.node_composition || []).filter(c => String(c.node_id) === String(n.id));
+                
+                comps.forEach(c => {
+                    const idx = SPECIES.indexOf(c.component);
+                    if (idx >= 0) {
+                        vec[idx] = parseFloat(c.value !== undefined ? c.value : (c.fraction || 0));
+                    }
                 });
-                // Se não tiver composição, assume C1 puro
-                let sum = v.reduce((a,b)=>a+b, 0);
-                if (sum < 0.1) v[2] = 100.0; 
-                return v;
+                return vec;
             });
 
-            // 5. EQUIPAMENTOS
-            const equip_in = [], tipos_equip_in = [], val_equip = [], equip_view = [];
-            const valves = (data.valves || []).concat((data.nodes||[]).filter(n => n.type === 'valve'));
-            const ductIdToIndex = new Map(data.ducts.map((d, i) => [d.id, i]));
-
-            valves.forEach(v => {
-                const dIdx = ductIdToIndex.get(v.duct_id || v.attachedTo);
-                if (dIdx !== undefined) {
-                    // Real
-                    equip_in.push([dIdx, parseInt(v.seg_index || 0)]);
-                    tipos_equip_in.push((v.type || 'A').charCodeAt(0));
-                    val_equip.push(parseFloat(v.value || 0));
-                    
-                    // View
-                    const dName = data.ducts[dIdx].name;
-                    equip_view.push([v.name, v.type, v.value, dName, v.seg_index]);
-                }
+            const ci_rows = geometria_in.length + data.ducts.length;
+            const cond_inic_in = Array.from({length: ci_rows}, () => {
+                const r = new Array(17).fill(0);
+                r[0] = 5e6; r[1] = 300; r[2] = 1;
+                // Chute inicial com base no primeiro nó
+                for(let k=0; k<14; k++) r[3+k] = composicao_nos_in[0][k];
+                return r;
             });
-
-            // 6. CONDIÇÃO INICIAL (Matriz Gigante)
-            const n_trechos = geometria_in.length;
-            const ci_rows = n_trechos + data.ducts.length;
-            // P=50bar, T=300K, Q=1, CO2=5, C1=95
-            const defaultCI = [5000000, 300, 1, 0, 0, 5, 95, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-            const cond_inic_in = Array.from({length: ci_rows}, () => [...defaultCI]);
 
             GLOBAL_BUILT_DATA = {
-                dutos_in, dutos_view, geometria_in, nos_in, tipos_nos_in, composicao_nos_in,
-                equip_in, tipos_equip_in, val_equip, equip_view,
-                numerico: getNumericParams(),
-                cond_inic_in
+                dutos_in, geometria_in, nos_in, tipos_nos_in, composicao_nos_in,
+                equip_in: [], tipos_equip_in: [], val_equip: [],
+                numerico: getNumericParams(), cond_inic_in, dutos_view
             };
 
             renderPreview(GLOBAL_BUILT_DATA);
-            
-            const btnSim = document.getElementById('btn-simular');
-            btnSim.disabled = false;
-            btnSim.style.opacity = "1";
-            log("Variáveis carregadas. Confira as tabelas abaixo.");
+            document.getElementById('btn-simular').disabled = false;
+            document.getElementById('btn-simular').style.opacity = "1";
+            log("Dados prontos. Padrões numéricos e química (sem normalização) aplicados.");
 
-        } catch (e) {
-            log("Erro: " + e.message); console.error(e);
-        }
+        } catch (e) { log("Erro: " + e.message); console.error(e); }
     }
 
     function renderPreview(data) {
         document.getElementById('preview-container').style.display = 'flex';
-        
-        // Exibe os dados de conectividade (Dutos + Nomes)
-        createTable('tab-dutos', ['Nome', 'Qtd', 'De', 'Para', 'Idx De', 'Idx Para'], data.dutos_view);
-        
-        // Exibe Geometria
-        createTable('tab-geom', ['L (m)', 'dy (m)', 'D (m)', 'Rug', 'U', 'Aço', 'Tamb'], data.geometria_in);
-        
-        // Exibe Nós (Junta Tipos ASCII e Valores)
-        const nosDisplay = data.nos_in.map((row, i) => {
-            const charType = String.fromCharCode(data.tipos_nos_in[i]);
-            return [charType, row[0], row[1]];
-        });
-        createTable('tab-nos', ['Tipo', 'Valor (P/Q/Vol)', 'Temp (K)'], nosDisplay);
-
-        // Exibe Equipamentos
-        createTable('tab-equip', ['Nome', 'Tipo', 'Valor', 'Duto', 'Pos'], data.equip_view);
-
-        // Exibe CI
-        createTable('tab-ci', ['P', 'T', 'Q', '...'], data.cond_inic_in);
+        createTable('tab-dutos', ['Nome', 'Segs', 'De', 'Para', 'Idx De', 'Idx Para'], data.dutos_view);
+        createTable('tab-geom', ['L', 'dy', 'D', 'Rug', 'U', 'Aço', 'Tamb'], data.geometria_in);
+        const nDisp = data.nos_in.map((r,i)=>[String.fromCharCode(data.tipos_nos_in[i]), r[0], r[1]]);
+        createTable('tab-nos', ['Tipo', 'Val', 'Temp'], nDisp);
+        createTable('tab-ci', ['P', 'T', 'Rho', 'Comps...'], data.cond_inic_in);
     }
 
     function createTable(id, h, r) {
-        let html = '<table class="excel-table"><thead><tr><th class="idx">#</th>' + h.map(x=>`<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+        let html = '<table class="excel-table"><thead><tr><th>#</th>' + h.map(x=>`<th>${x}</th>`).join('') + '</tr></thead><tbody>';
         r.forEach((row,i) => {
-            html += `<tr><td class="idx">${i}</td>` + row.map(v => {
-                let show = v;
-                if (typeof v === 'number' && !Number.isInteger(v)) show = (Math.abs(v)>1e4 || Math.abs(v)<0.01) ? v.toExponential(2) : v.toFixed(4);
-                return `<td class="num">${show}</td>`;
-            }).join('') + '</tr>';
+            html += `<tr><td>${i}</td>` + row.map(v => `<td class="num">${typeof v==='number'? (Math.abs(v)>1e4?v.toExponential(1):v.toFixed(3)):v}</td>`).join('') + '</tr>';
         });
         document.getElementById(id).innerHTML = html + '</tbody></table>';
     }
@@ -307,26 +231,22 @@
         const btn = document.getElementById('btn-simular');
         btn.disabled = true;
         try {
-            log("Enviando para Wrapper...");
-            // O Wrapper vai ler 'dutos_in', 'nos_in' (2D arrays) e achatar para a DLL.
+            log("Chamando Solver WASM...");
             GLOBAL_BUILT_DATA.numerico = getNumericParams();
-            
             const res = await window.runFluxoLib(GLOBAL_BUILT_DATA, 'Fluxo_TS_WASM');
             log(`Retorno: ${res.ret}`);
-            
             if(res.ret === 0) renderResults(res.cond_inic_in);
-            else alert("Erro na execução (Retorno " + res.ret + ")");
+            else alert("Erro (Retorno " + res.ret + ")");
         } catch(e) { log("Erro: " + e.message); }
         finally { btn.disabled = false; }
     }
 
     function renderResults(m) {
         document.getElementById('results-area').style.display = 'block';
-        // Plota resultados
         const view = m.map(r=>[r[0]/1e5, r[1]-273.15, r[2], r[3]]);
-        let h = '<table class="excel-table"><thead><tr><th>#</th><th>P (bar)</th><th>T (°C)</th><th>Q (Vazão)</th><th>Rho</th></tr></thead><tbody>';
+        let h = '<table class="excel-table"><thead><tr><th>#</th><th>P (bar)</th><th>T (C)</th><th>Q</th><th>Rho</th></tr></thead><tbody>';
         view.forEach((r,i) => {
-            if(Math.abs(r[0]) < 1e-9 && Math.abs(r[1]+273.15) < 1e-9) return; // Pula vazios
+            if(Math.abs(r[0]) < 1e-5) return;
             h+=`<tr><td>${i}</td><td class="num">${r[0].toFixed(2)}</td><td class="num">${r[1].toFixed(1)}</td><td class="num">${r[2].toFixed(4)}</td><td class="num">${r[3].toFixed(2)}</td></tr>`;
         });
         document.getElementById('res-table-container').innerHTML = h + '</tbody></table>';
