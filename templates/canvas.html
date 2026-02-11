@@ -93,12 +93,20 @@
         }
     };
 
-    function setStatus(m) { document.getElementById('status-msg').innerText = m; }
+    function setStatus(m) { 
+        const el = document.getElementById('status-msg');
+        if(el) el.innerText = m;
+        console.log(`[Status] ${m}`);
+    }
 
     // --- Resizing ---
     function resize() {
         const w = document.getElementById('wrap');
-        canvas.setWidth(w.clientWidth); canvas.setHeight(w.clientHeight - 22); canvas.renderAll();
+        if(w) {
+            canvas.setWidth(w.clientWidth); 
+            canvas.setHeight(w.clientHeight - 22); 
+            canvas.renderAll();
+        }
     }
     window.addEventListener('resize', resize); setTimeout(resize, 100);
 
@@ -376,7 +384,6 @@
                     type: d.originalType || 'A',
                     duct_id: d.attachedDuctId,
                     t: d.ratio || 0.5,
-                    // Garante que value e seg_index sejam salvos
                     value: (d.props && d.props.value) || 0,
                     seg_index: (d.props && d.props.seg_index) !== undefined ? d.props.seg_index : 0
                 });
@@ -444,73 +451,92 @@
         return { nodes, ducts, valves, duct_geom, node_props, node_composition, version: "2.1", timestamp: Date.now() };
     }
 
-// --- EXPORTAR (Software Sério: Pergunta o nome, compacta em Gzip e salva como .rfm) ---
-// --- EXPORTAR (Compacta em Gzip e salva como .rfm) ---
+    // --- EXPORTAR (BLINDADO: Fallback robusto e Gzip nativo) ---
     async function exportJSON() {
-        const data = getModel();
-        const jsonStr = JSON.stringify(data, null, 2);
-        
-        const defaultName = `projeto_malha.rfm`;
-
+        setStatus("Preparando exportação...");
         try {
-            // 1. Abre a janela "Salvar Como" para o usuário escolher o nome e local
-            if (window.showSaveFilePicker) {
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: defaultName,
-                    types: [{
-                        description: 'Arquivo de Malha RotavaFlow (.rfm)',
-                        accept: { 'application/octet-stream': ['.rfm'] },
-                    }],
-                });
+            const data = getModel();
+            const jsonStr = JSON.stringify(data, null, 2);
+            const defaultName = `projeto_malha.rfm`;
 
-                // 2. Transforma o JSON em Stream e aplica compressão Gzip
-                const stream = new Blob([jsonStr], { type: 'application/json' }).stream();
-                const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
-                
-                const writable = await handle.createWritable();
-                await compressedStream.pipeTo(writable);
-                
-                setStatus("Projeto exportado com sucesso (.rfm compactado)!");
-            } else {
-                // Fallback para navegadores que não suportam showSaveFilePicker
-                const stream = new Blob([jsonStr], { type: 'application/json' }).stream();
-                const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
-                const blob = await new Response(compressedStream).blob();
-                
+            // Verifica se o navegador suporta compressão nativa
+            if (!window.CompressionStream) {
+                alert("Seu navegador não suporta compressão nativa. Salvando como JSON simples.");
+                const blob = new Blob([jsonStr], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = defaultName;
+                a.download = "malha.json";
                 a.click();
-                setStatus("Download iniciado (.rfm compactado).");
+                return;
             }
+
+            // Cria o Stream Comprimido
+            const stream = new Blob([jsonStr], { type: 'application/json' }).stream();
+            const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+
+            // Tenta usar a API moderna "Salvar Como"
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: defaultName,
+                        types: [{
+                            description: 'RotavaFlow Mesh (.rfm)',
+                            accept: { 'application/octet-stream': ['.rfm'] }
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await compressedStream.pipeTo(writable);
+                    setStatus("Salvo com sucesso via API!");
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return; // Usuário cancelou
+                    console.warn("Falha no FilePicker, tentando fallback...", err);
+                }
+            }
+
+            // Fallback: Download Direto (Gzipado)
+            setStatus("Gerando download...");
+            const response = new Response(compressedStream);
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = defaultName;
+            a.click();
+            URL.revokeObjectURL(url); // Limpa memória
+            setStatus("Download iniciado (.rfm).");
+
         } catch (err) {
-            if (err.name !== 'AbortError') {
-                console.error("Erro ao exportar:", err);
-                alert("Erro ao salvar arquivo.");
-            }
+            console.error("Erro fatal ao exportar:", err);
+            alert("Erro ao salvar: " + err.message);
         }
     }
 
-    // --- IMPORTAR (Inteligente: Descompacta .rfm ou lê .json direto) ---
+    // --- IMPORTAR (Híbrido: Gzip ou Texto) ---
     async function importJSON(e) {
         const file = e.target.files[0];
         if(!file) return;
 
         try {
+            setStatus("Lendo arquivo...");
             let jsonStr;
-            // Verifica a extensão para decidir se precisa descompactar
-            if (file.name.toLowerCase().endsWith('.rfm')) {
-                setStatus("Lendo e descompactando arquivo .rfm...");
-                
-                // Usa DecompressionStream para descompactar o Gzip
-                const ds = new DecompressionStream('gzip');
-                const stream = file.stream().pipeThrough(ds);
-                const blob = await new Response(stream).blob();
-                jsonStr = await blob.text();
+            const fname = file.name.toLowerCase();
+
+            // Tenta descompactar se for .rfm ou .gz
+            if (fname.endsWith('.rfm') || fname.endsWith('.gz')) {
+                try {
+                    const ds = new DecompressionStream('gzip');
+                    const stream = file.stream().pipeThrough(ds);
+                    const blob = await new Response(stream).blob();
+                    jsonStr = await blob.text();
+                } catch (decompErr) {
+                    console.warn("Falha na descompactação, tentando ler como texto puro...", decompErr);
+                    // Fallback: Pode ser um arquivo renomeado sem compactação
+                    jsonStr = await file.text();
+                }
             } else {
-                // Se for .json ou outro, tenta ler como texto puro
-                setStatus("Lendo arquivo JSON...");
+                // Arquivo .json normal
                 jsonStr = await file.text();
             }
 
@@ -522,12 +548,10 @@
 
         } catch(err) {
             console.error("Erro na importação:", err);
-            setStatus("Erro ao ler arquivo. Verifique se o formato está correto.");
-            alert("Não foi possível processar o arquivo. Certifique-se de que é um .rfm válido ou um JSON de malha.");
+            setStatus("Erro crítico ao abrir arquivo.");
+            alert("Arquivo inválido ou corrompido.");
         }
-        
-        // Limpa o input para permitir carregar o mesmo arquivo novamente se necessário
-        e.target.value = ''; 
+        e.target.value = ''; // Reseta input
     }
 
     function saveState() {
@@ -539,7 +563,7 @@
         if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }
     };
 
-    // --- IMPORTAÇÃO (Mantida a robustez para IDs e Composição) ---
+    // --- IMPORTAÇÃO (Adaptador) ---
     function adaptToNative(data) {
         const propsMap = new Map();
         if(data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
@@ -648,9 +672,13 @@
 
     const saved = localStorage.getItem(STORAGE_KEY);
     if(saved) {
-        const d = JSON.parse(saved);
-        const ready = adaptToNative(d);
-        reconstruct(ready);
+        try {
+            const d = JSON.parse(saved);
+            const ready = adaptToNative(d);
+            reconstruct(ready);
+        } catch(e) {
+            console.error("Erro ao carregar auto-save:", e);
+        }
     }
 </script>
 {% endblock %}
