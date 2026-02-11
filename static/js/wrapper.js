@@ -18,27 +18,6 @@ export async function initFluxoWasm() {
     return _mod;
 }
 
-// Auxiliar de Auditoria
-function compararVetores(nome, atual, gabarito) {
-    if (!gabarito) return;
-    const atualArr = Array.from(atual);
-    if (atualArr.length !== gabarito.length) {
-        console.error(`[Diferença] ${nome}: Tamanhos diferentes! Atual: ${atualArr.length}, Gabarito: ${gabarito.length}`);
-        return;
-    }
-    let erros = 0;
-    for (let i = 0; i < atualArr.length; i++) {
-        const diff = Math.abs(atualArr[i] - gabarito[i]);
-        const tol = (nome.includes("ASCII") || nome.includes("Conectividade")) ? 0 : 1e-6;
-        if (diff > tol) {
-            if (erros < 5) console.warn(`[Diferença] ${nome} [${i}]: Gerado=${atualArr[i]}, Esperado=${gabarito[i]}`);
-            erros++;
-        }
-    }
-    if (erros === 0) console.log(`✅ [OK] ${nome} coincide perfeitamente.`);
-    else console.error(`❌ [ERRO] ${nome} tem ${erros} divergentes.`);
-}
-
 function flattenColMajor(rows, cols, getter, isInt = false) {
     const buf = isInt ? new Int32Array(rows * cols) : new Float64Array(rows * cols);
     let k = 0;
@@ -53,12 +32,6 @@ function mallocCopy(mod, typed) {
 }
 
 export async function runFluxo(built, which = 'Fluxo_TS_WASM') {
-    let gabarito = null;
-    try {
-        const resp = await fetch('/static/GABARITO_Fluxo_TS_WASM_1770834472206.json');
-        gabarito = await resp.json();
-    } catch (e) {}
-
     const mod = await initFluxoWasm();
     const n_dutos = built.dutos_in.length, n_trechos = built.geometria_in.length, n_nos = built.tipos_nos_in.length;
     const n_equip = (built.tipos_equip_in || []).length, ci_rows = n_trechos + n_dutos;
@@ -70,18 +43,6 @@ export async function runFluxo(built, which = 'Fluxo_TS_WASM') {
     const comp_f64 = flattenColMajor(n_nos, 14, (i, j) => built.composicao_nos_in[i][j]);
     const ci_f64 = flattenColMajor(ci_rows, 17, (i, j) => built.cond_inic_in[i][j]);
     const num_f64 = Float64Array.from(built.numerico || []);
-
-    if (gabarito) {
-        console.group("🔍 Auditoria Pre-WASM");
-        compararVetores("Dutos (Conectividade)", dutos_i32, gabarito.INTEIROS.dutos_conectividade);
-        compararVetores("Tipos Nós (ASCII)", tipos_i32, gabarito.INTEIROS.tipos_nos_ascii);
-        compararVetores("Geometria (7 colunas)", geom_f64, gabarito.DECIMAIS.geometria);
-        compararVetores("Nós Valores (P/Q/T)", nos_f64, gabarito.DECIMAIS.nos_valores);
-        compararVetores("Composição (14 componentes)", comp_f64, gabarito.DECIMAIS.composicao);
-        compararVetores("Condição Inicial", ci_f64, gabarito.DECIMAIS.cond_inic);
-        compararVetores("Parâmetros Numéricos", num_f64, gabarito.DECIMAIS.numerico);
-        console.groupEnd();
-    }
 
     const p_ci = mallocCopy(mod, ci_f64), p_geom = mallocCopy(mod, geom_f64), p_dutos = mallocCopy(mod, dutos_i32);
     const p_comp = mallocCopy(mod, comp_f64), p_tnos = mallocCopy(mod, tipos_i32), p_nos = mallocCopy(mod, nos_f64);

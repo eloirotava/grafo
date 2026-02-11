@@ -30,7 +30,7 @@
             <tr>
                 <th style="width: 15%;">Tag</th>
                 <th style="width: 15%;">Tipo</th>
-                <th style="width: 15%;">Valor (Set)</th>
+                <th style="width: 15%;">Valor (Set/%)</th>
                 <th style="width: 20%;">Duto (Instalação)</th>
                 <th style="width: 15%;">Pos (%) <small style="color:#999; font-weight:normal">(Visual)</small></th>
                 <th style="width: 20%;">Tramo (seg_index)</th>
@@ -52,7 +52,6 @@
         const ductMap = new Map();
         if(globalData.ducts) globalData.ducts.forEach(d => ductMap.set(d.id, d));
 
-        // Mapa de Geometria para cálculo de fallback do Tramo
         const geomMap = new Map();
         if(globalData.duct_geom) {
             globalData.duct_geom.forEach(g => {
@@ -62,8 +61,6 @@
         }
 
         let sourceValves = globalData.valves || [];
-        
-        // Fallback: Se tabela valves vazia, tenta pegar dos nós
         if (sourceValves.length === 0 && globalData.nodes) {
             sourceValves = globalData.nodes.filter(n => n.type === 'valve').map(n => ({
                 id: n.id,
@@ -72,21 +69,16 @@
                 duct_id: n.attachedTo || n.attachedDuctId,
                 t: n.ratio || 0.5,
                 value: (n.props && n.props.value) || 0,
-                seg_index: (n.props && n.props.seg_index) // Tenta pegar se existir
+                seg_index: (n.props && n.props.seg_index) 
             }));
         }
 
         valvesList = sourceValves.map(v => {
-            // Propriedades essenciais
             const props = v.props || {};
             const value = v.value !== undefined ? v.value : (props.value !== undefined ? props.value : 0);
             
-            // Lógica do Tramo (seg_index)
-            // 1. Usa o que veio do banco/JSON
-            // 2. Se não tiver, calcula baseado no 't' e geometria
             let currentSeg = v.seg_index;
             if (currentSeg === undefined || currentSeg === null) {
-                // Cálculo automático
                 const geom = geomMap.get(v.duct_id) || [];
                 if (geom.length > 0) {
                     geom.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
@@ -102,7 +94,7 @@
                     }
                     if (currentSeg === undefined) currentSeg = geom[geom.length-1].seg_index;
                 } else {
-                    currentSeg = 0; // Default se não tiver geometria
+                    currentSeg = 0; 
                 }
             }
 
@@ -130,13 +122,14 @@
             const tr = document.createElement('tr');
             tr.className = `row-${v.type}`; 
 
-            const isSetPoint = (v.type === 'P' || v.type === 'Q');
+            // Permite edição de valor para P, Q e A (Aberto/Acessório)
+            const isEditable = (v.type === 'P' || v.type === 'Q' || v.type === 'A');
 
             tr.innerHTML = `
                 <td><strong>${v.name}</strong></td>
                 <td>
                     <select class="input-cell" onchange="updateValve('${v.id}', 'type', this.value)">
-                        <option value="A" ${v.type==='A'?'selected':''}>A (Acessório)</option>
+                        <option value="A" ${v.type==='A'?'selected':''}>A (Aberto)</option>
                         <option value="F" ${v.type==='F'?'selected':''}>F (Fechada)</option>
                         <option value="P" ${v.type==='P'?'selected':''}>P (Pressão)</option>
                         <option value="Q" ${v.type==='Q'?'selected':''}>Q (Vazão)</option>
@@ -144,7 +137,7 @@
                 </td>
                 <td>
                     <input type="number" class="input-cell" value="${v.value}" step="0.1" 
-                    ${!isSetPoint ? 'disabled' : ''} onchange="updateValve('${v.id}', 'value', this.value)">
+                    ${!isEditable ? 'disabled' : ''} onchange="updateValve('${v.id}', 'value', this.value)">
                 </td>
                 <td><span class="badge">${v.ductName}</span></td>
                 <td style="color:#666;">${Math.round((v.t||0)*100)}%</td>
@@ -171,7 +164,6 @@
     };
 
     function save() {
-        // Atualiza tabela valves
         globalData.valves = valvesList.map(v => ({
             id: v.id,
             name: v.name,
@@ -179,11 +171,10 @@
             value: v.value,
             duct_id: v.duct_id,
             t: v.t,
-            seg_index: v.seg_index, // Salva o tramo
-            props: { value: v.value, seg_index: v.seg_index } // Backup em props
+            seg_index: v.seg_index, 
+            props: { value: v.value, seg_index: v.seg_index } 
         }));
 
-        // Atualiza nodes (Canvas)
         if (globalData.nodes) {
             globalData.nodes.forEach(n => {
                 if (n.type === 'valve') {
@@ -192,7 +183,7 @@
                         n.originalType = updated.type;
                         if (!n.props) n.props = {};
                         n.props.value = updated.value;
-                        n.props.seg_index = updated.seg_index; // Passa o tramo pro Canvas guardar
+                        n.props.seg_index = updated.seg_index; 
                     }
                 }
             });

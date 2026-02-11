@@ -1,23 +1,35 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div style="padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333;">
-    <h1 style="color: #0078d7;">Manual do RotavaFlow</h1>
-    <p>Bem-vindo ao simulador de escoamento. Abaixo estão as instruções básicas.</p>
+<div style="padding: 40px; max-width: 900px; margin: 0 auto; line-height: 1.8; color: #333; font-family: 'Segoe UI', sans-serif;">
+    <h1 style="color: #0078d7; border-bottom: 2px solid #eee; padding-bottom: 15px;">Manual do RotavaFlow</h1>
+    <p style="font-size: 1.1em; color: #666;">
+        O <strong>RotavaFlow</strong> é um simulador de escoamento composicional de alta performance que roda inteiramente no seu navegador, inclusive offline.
+    </p>
     
-    <h3>1. Editor (Canvas)</h3>
-    <ul>
-        <li>Arraste componentes da barra lateral esquerda para a área branca.</li>
-        <li>Arraste "Duto" para criar conexões.</li>
-        <li>As setas se conectam automaticamente (snap) aos pontos pretos dos equipamentos.</li>
-        <li><strong>Duplo clique</strong> em qualquer item para renomeá-lo.</li>
-        <li>Use <strong>Ctrl+S</strong> para salvar seu progresso no servidor.</li>
+    <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #0078d7; margin: 20px 0; border-radius: 4px;">
+        <strong>Dica Rápida:</strong> Você pode instalar este aplicativo no seu computador ou celular e usá-lo sem internet!
+    </div>
+
+    <h3 style="color: #444; margin-top: 30px;">1. Editor de Malha (Canvas)</h3>
+    <ul style="list-style-type: circle; margin-left: 20px;">
+        <li><strong>Arrastar e Soltar:</strong> Puxe nós, válvulas e equipamentos da barra lateral para a área de desenho.</li>
+        <li><strong>Conexões:</strong> Use a ferramenta "Duto" para ligar os componentes. As pontas se conectam automaticamente (snap) quando ficam verdes.</li>
+        <li><strong>Navegação Rápida:</strong> Dê <strong>duplo clique</strong> em qualquer componente (Nó, Válvula ou Duto) para ir direto à sua página de configuração.</li>
+        <li><strong>Salvar/Carregar:</strong> Use os botões na lateral para salvar seu projeto em arquivo <code>.rfm</code> (RotavaFlow Mesh).</li>
     </ul>
 
-    <h3>2. Simulação</h3>
-    <p>Na aba "Simulação", configure as propriedades do fluido (densidade, viscosidade) e os parâmetros numéricos do solver.</p>
+    <h3 style="color: #444; margin-top: 30px;">2. Configuração Física</h3>
+    <ul style="list-style-type: circle; margin-left: 20px;">
+        <li><strong>Nós:</strong> Defina pressão, temperatura e a composição química (C1, C2, CO2, etc.) de cada ponto.</li>
+        <li><strong>Dutos:</strong> Configure diâmetro, comprimento, rugosidade e troca térmica.</li>
+        <li><strong>Equipamentos:</strong> Ajuste a abertura de válvulas ou defina curvas de performance.</li>
+    </ul>
 
-    <h3>3. Relatórios</h3>
-    <p>Visualize os perfis de pressão, temperatura e vazão após a execução da simulação.</p>
+    <h3 style="color: #444; margin-top: 30px;">3. Simulação & Relatórios</h3>
+    <p>
+        O motor de cálculo (Solver WASM) resolve as equações de balanço de massa, energia e momento.
+        Após a convergência (Código 0), vá para a aba <strong>Relatórios</strong> para visualizar gráficos interativos de pressão, temperatura e vazão ao longo da linha.
+    </p>
 </div>
 {% endblock %}

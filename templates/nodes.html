@@ -14,7 +14,13 @@
     .highlight-p { background-color: #e8f5e9; border-color: #a5d6a7; font-weight: bold; color: #1b5e20; }
     .highlight-q { background-color: #fff3e0; border-color: #ffcc80; font-weight: bold; color: #e65100; }
     .highlight-i { background-color: #e3f2fd; border-color: #90caf9; font-weight: bold; color: #0d47a1; }
-    .type-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; display: inline-block; min-width: 20px; text-align: center; }
+    
+    /* Layout linha única para composição */
+    .comp-container { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding-bottom: 5px; max-width: 500px; }
+    .comp-container::-webkit-scrollbar { height: 6px; }
+    .comp-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    
+    .type-select { padding: 4px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; border: none; cursor: pointer; }
     .type-P { background-color: #27ae60; }
     .type-Q { background-color: #e67e22; }
     .type-I { background-color: #2980b9; }
@@ -30,12 +36,12 @@
         <thead>
             <tr>
                 <th style="width: 10%;">Tag</th>
-                <th style="width: 6%;">Tipo</th>
+                <th style="width: 8%;">Tipo</th>
                 <th style="width: 12%;">Pressão (bar)</th>
                 <th style="width: 12%;">Vazão (kg/s)</th>
-                <th style="width: 12%;">Temp (°C)</th>
-                <th style="width: 12%;">Volume (m³)</th>
-                <th style="width: 36%;">Composição (% Molar)</th>
+                <th style="width: 10%;">Temp (°C)</th>
+                <th style="width: 10%;">Volume (m³)</th>
+                <th style="width: 38%;">Composição (% Molar)</th>
             </tr>
         </thead>
         <tbody id="nodes-body"></tbody>
@@ -52,7 +58,6 @@
         if (!raw) return;
         globalData = JSON.parse(raw);
         
-        // Mapas auxiliares
         const propsMap = new Map();
         if(globalData.node_props) globalData.node_props.forEach(p => propsMap.set(String(p.node_id), p));
         
@@ -72,13 +77,10 @@
                 const phys = n.physics || propsMap.get(pid) || {};
                 const comps = n.composition || compMap.get(pid) || [];
                 
-                // [CORREÇÃO] Lê 'value' OU 'fraction'
                 const compObj = {};
                 comps.forEach(c => {
                     const val = (c.value !== undefined) ? c.value : c.fraction;
-                    if(val !== undefined && val !== null) {
-                        compObj[c.component] = val;
-                    }
+                    if(val !== undefined && val !== null) compObj[c.component] = val;
                 });
 
                 return {
@@ -120,10 +122,10 @@
                 <td><input type="number" class="input-cell ${isI?'highlight-i':''}" value="${n.physics.volume ?? ''}" step="0.1" ${!isI?'disabled':''} onchange="updatePhys('${n.id}', 'volume', this.value)"></td>
             `;
 
-            let compInputs = '<div style="display:flex; flex-wrap:wrap; gap:4px;">';
+            let compInputs = '<div class="comp-container">';
             SPECIES.forEach(sp => {
                 const val = n.comp[sp] ?? '';
-                compInputs += `<div style="font-size:10px; display:flex; flex-direction:column; width:35px;">
+                compInputs += `<div style="font-size:10px; display:flex; flex-direction:column; min-width:35px;">
                     <span style="color:#888">${sp}</span>
                     <input type="text" value="${val}" style="width:100%; border:1px solid #ddd; padding:2px;" onchange="updateComp('${n.id}', '${sp}', this.value)">
                 </div>`;
@@ -132,13 +134,28 @@
 
             tr.innerHTML = `
                 <td><strong>${n.name}</strong></td>
-                <td><span class="type-badge type-${n.type}">${n.type}</span></td>
+                <td>
+                    <select class="type-select type-${n.type}" onchange="updateType('${n.id}', this.value)">
+                        <option value="P" ${n.type==='P'?'selected':''}>P</option>
+                        <option value="Q" ${n.type==='Q'?'selected':''}>Q</option>
+                        <option value="I" ${n.type==='I'?'selected':''}>I</option>
+                    </select>
+                </td>
                 ${inputs}
                 <td>${compInputs}</td>
             `;
             tbody.appendChild(tr);
         });
     }
+
+    window.updateType = function(id, newType) {
+        const node = globalNodes.find(n => String(n.id) === String(id));
+        if(node) {
+            node.type = newType;
+            saveToStorage();
+            render(); // Re-renderiza para atualizar cores e inputs
+        }
+    };
 
     window.updatePhys = function(id, field, value) {
         const node = globalNodes.find(n => String(n.id) === String(id));
@@ -161,14 +178,13 @@
         globalNodes.forEach(gn => {
             const originalNode = globalData.nodes.find(n => String(n.id) === String(gn.id));
             if(originalNode) {
+                originalNode.originalType = gn.type; // Salva a mudança de tipo
                 if(!originalNode.physics) originalNode.physics = {};
                 Object.assign(originalNode.physics, gn.physics);
-                // Salva como 'value' para padronizar
                 originalNode.composition = Object.entries(gn.comp).map(([k, v]) => ({ component: k, value: v }));
             }
         });
 
-        // Atualiza tabelas planas também (para exportação correta)
         globalData.node_props = globalNodes.map(gn => ({
             node_id: gn.id,
             pressure: gn.physics.pressure,
@@ -180,12 +196,8 @@
         globalData.node_composition = [];
         globalNodes.forEach(gn => {
             Object.entries(gn.comp).forEach(([k, v]) => {
-                // Aqui salvamos tanto 'value' quanto 'fraction' para garantir compatibilidade total
                 globalData.node_composition.push({ 
-                    node_id: gn.id, 
-                    component: k, 
-                    value: v,      // Padrão novo
-                    fraction: v    // Padrão antigo/SQL
+                    node_id: gn.id, component: k, value: v, fraction: v 
                 });
             });
         });
