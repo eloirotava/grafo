@@ -1,38 +1,41 @@
 {% extends "layout.html" %}
 {% block content %}
 <style>
-    .page-content { padding: 30px; width: 100%; max-width: 1200px; margin: 0 auto; }
+    .page-content { padding: 30px; width: 100%; max-width: 1400px; margin: 0 auto; }
     h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 20px; }
     
-    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; font-size: 13px; }
-    .data-table th, .data-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; font-size: 13px; }
+    .data-table th, .data-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
     .data-table th { background-color: #f8f9fa; font-weight: 600; color: #444; border-bottom: 2px solid #ddd; }
-    .data-table tr:hover { background-color: #f1f1f1; }
     
-    .input-cell { width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
-    .type-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; color: white; min-width: 25px; display: inline-block; text-align: center; }
-    .type-P { background-color: #27ae60; } /* Verde - Pressão */
-    .type-Q { background-color: #e67e22; } /* Laranja - Vazão */
-    .type-I { background-color: #2980b9; } /* Azul - Interno */
+    .input-cell { width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+    .input-cell:disabled { background-color: #f5f5f5; color: #aaa; border-color: #e0e0e0; cursor: not-allowed; }
     
-    .coord { font-family: monospace; color: #888; font-size: 0.85em; }
-    .comp-list { font-size: 0.85em; color: #555; }
+    .highlight-p { background-color: #e8f5e9; border-color: #a5d6a7; font-weight: bold; color: #1b5e20; }
+    .highlight-q { background-color: #fff3e0; border-color: #ffcc80; font-weight: bold; color: #e65100; }
+    .highlight-i { background-color: #e3f2fd; border-color: #90caf9; font-weight: bold; color: #0d47a1; }
+    .type-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; display: inline-block; min-width: 20px; text-align: center; }
+    .type-P { background-color: #27ae60; }
+    .type-Q { background-color: #e67e22; }
+    .type-I { background-color: #2980b9; }
 </style>
 
 <div class="page-content">
-    <h2>Nós (Junções e Fronteiras)</h2>
-    <p style="color: #666; margin-bottom: 20px;">Propriedades físicas e composição dos pontos da malha.</p>
-
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Nós (Condições de Contorno)</h2>
+        <span id="save-status" style="color:green; font-weight:bold; opacity:0; transition: opacity 0.5s;">Salvo!</span>
+    </div>
+    
     <table class="data-table">
         <thead>
             <tr>
                 <th style="width: 10%;">Tag</th>
-                <th style="width: 8%;">Tipo</th>
-                <th style="width: 15%;">Pressão (bar)</th>
-                <th style="width: 15%;">Temp (°C)</th>
-                <th style="width: 15%;">Elevação (m)</th>
-                <th style="width: 25%;">Composição (% Molar)</th>
-                <th style="width: 12%;">Coords</th>
+                <th style="width: 6%;">Tipo</th>
+                <th style="width: 12%;">Pressão (bar)</th>
+                <th style="width: 12%;">Vazão (kg/s)</th>
+                <th style="width: 12%;">Temp (°C)</th>
+                <th style="width: 12%;">Volume (m³)</th>
+                <th style="width: 36%;">Composição (% Molar)</th>
             </tr>
         </thead>
         <tbody id="nodes-body"></tbody>
@@ -40,66 +43,159 @@
 </div>
 
 <script>
-    function loadAndJoin() {
+    const SPECIES = ['N2','CO2','C1','C2','iC3','nC3','iC4','nC4','C5','C6','C7','C8','C9','C10+'];
+    let globalNodes = [];
+    let globalData = {};
+
+    function init() {
         const raw = localStorage.getItem('malha_db_v2');
-        if (!raw) return [];
-        const data = JSON.parse(raw);
+        if (!raw) return;
+        globalData = JSON.parse(raw);
         
-        // Mapas auxiliares para cruzamento de dados (JOIN)
+        // Mapas auxiliares
         const propsMap = new Map();
-        if(data.node_props) data.node_props.forEach(p => propsMap.set(p.node_id, p));
+        if(globalData.node_props) globalData.node_props.forEach(p => propsMap.set(String(p.node_id), p));
         
         const compMap = new Map();
-        if(data.node_composition) {
-            data.node_composition.forEach(c => {
-                if(!compMap.has(c.node_id)) compMap.set(c.node_id, []);
-                compMap.get(c.node_id).push(c);
+        if(globalData.node_composition) {
+            globalData.node_composition.forEach(c => {
+                const id = String(c.node_id);
+                if(!compMap.has(id)) compMap.set(id, []);
+                compMap.get(id).push(c);
             });
         }
 
-        // Retorna nós 'hidratados'
-        return (data.nodes || []).filter(n => n.type !== 'valve').map(n => {
-            return {
-                ...n,
-                // Prioriza o dado que já está dentro (se houver), senão busca na tabela
-                physics: n.physics || propsMap.get(n.id) || {},
-                composition: n.composition || compMap.get(n.id) || []
-            };
+        globalNodes = (globalData.nodes || [])
+            .filter(n => n.type !== 'valve')
+            .map(n => {
+                const pid = String(n.id);
+                const phys = n.physics || propsMap.get(pid) || {};
+                const comps = n.composition || compMap.get(pid) || [];
+                
+                // [CORREÇÃO] Lê 'value' OU 'fraction'
+                const compObj = {};
+                comps.forEach(c => {
+                    const val = (c.value !== undefined) ? c.value : c.fraction;
+                    if(val !== undefined && val !== null) {
+                        compObj[c.component] = val;
+                    }
+                });
+
+                return {
+                    id: n.id,
+                    name: n.name,
+                    type: n.originalType || 'I',
+                    physics: {
+                        pressure: phys.pressure,
+                        flow: phys.flow,
+                        temperature: phys.temperature,
+                        volume: phys.volume
+                    },
+                    comp: compObj
+                };
+            });
+
+        render();
+    }
+
+    function render() {
+        const tbody = document.getElementById('nodes-body');
+        tbody.innerHTML = '';
+        
+        if (globalNodes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#999;">Nenhum nó encontrado.</td></tr>';
+            return;
+        }
+
+        globalNodes.forEach((n) => {
+            const tr = document.createElement('tr');
+            const isP = n.type === 'P';
+            const isQ = n.type === 'Q';
+            const isI = n.type === 'I';
+
+            const inputs = `
+                <td><input type="number" class="input-cell ${isP?'highlight-p':''}" value="${n.physics.pressure ?? ''}" step="0.1" ${!isP?'disabled':''} onchange="updatePhys('${n.id}', 'pressure', this.value)"></td>
+                <td><input type="number" class="input-cell ${isQ?'highlight-q':''}" value="${n.physics.flow ?? ''}" step="0.1" ${!isQ?'disabled':''} onchange="updatePhys('${n.id}', 'flow', this.value)"></td>
+                <td><input type="number" class="input-cell" value="${n.physics.temperature ?? ''}" step="1" onchange="updatePhys('${n.id}', 'temperature', this.value)"></td>
+                <td><input type="number" class="input-cell ${isI?'highlight-i':''}" value="${n.physics.volume ?? ''}" step="0.1" ${!isI?'disabled':''} onchange="updatePhys('${n.id}', 'volume', this.value)"></td>
+            `;
+
+            let compInputs = '<div style="display:flex; flex-wrap:wrap; gap:4px;">';
+            SPECIES.forEach(sp => {
+                const val = n.comp[sp] ?? '';
+                compInputs += `<div style="font-size:10px; display:flex; flex-direction:column; width:35px;">
+                    <span style="color:#888">${sp}</span>
+                    <input type="text" value="${val}" style="width:100%; border:1px solid #ddd; padding:2px;" onchange="updateComp('${n.id}', '${sp}', this.value)">
+                </div>`;
+            });
+            compInputs += '</div>';
+
+            tr.innerHTML = `
+                <td><strong>${n.name}</strong></td>
+                <td><span class="type-badge type-${n.type}">${n.type}</span></td>
+                ${inputs}
+                <td>${compInputs}</td>
+            `;
+            tbody.appendChild(tr);
         });
     }
 
-    const nodes = loadAndJoin();
-    const tbody = document.getElementById('nodes-body');
-    
-    nodes.forEach(n => {
-        const tr = document.createElement('tr');
-        
-        let realType = n.originalType || 'I';
-        const phys = n.physics || {};
-        
-        // Pega valores com fallback
-        const press = phys.pressure !== undefined ? phys.pressure : 1.01;
-        const temp = phys.temperature !== undefined ? phys.temperature : 25.0;
-        const elev = phys.elevation !== undefined ? phys.elevation : 0.0; // Agora pega elevação também? No json anterior não tinha vazão explicita na prop física, mas ok.
-
-        // Formata Composição
-        let compStr = '-';
-        if (n.composition && n.composition.length > 0) {
-            compStr = n.composition.map(c => `<b>${c.component}</b>: ${c.value}%`).join(', ');
+    window.updatePhys = function(id, field, value) {
+        const node = globalNodes.find(n => String(n.id) === String(id));
+        if(node) {
+            node.physics[field] = value === '' ? null : parseFloat(value);
+            saveToStorage();
         }
+    };
 
-        tr.innerHTML = `
-            <td><strong>${n.name}</strong></td>
-            <td><span class="type-badge type-${realType}">${realType}</span></td>
-            <td><input type="number" class="input-cell" value="${press}" step="0.1"></td>
-            <td><input type="number" class="input-cell" value="${temp}" step="1"></td>
-            <td><input type="number" class="input-cell" value="${elev}" step="1"></td>
-            <td class="comp-list">${compStr}</td>
-            <td class="coord">X:${Math.round(n.x)} Y:${Math.round(n.y)}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+    window.updateComp = function(id, compName, value) {
+        const node = globalNodes.find(n => String(n.id) === String(id));
+        if(node) {
+            if(value === '') delete node.comp[compName];
+            else node.comp[compName] = parseFloat(value);
+            saveToStorage();
+        }
+    };
 
-    if (nodes.length === 0) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#888;">Nenhum nó encontrado.</td></tr>';
+    function saveToStorage() {
+        globalNodes.forEach(gn => {
+            const originalNode = globalData.nodes.find(n => String(n.id) === String(gn.id));
+            if(originalNode) {
+                if(!originalNode.physics) originalNode.physics = {};
+                Object.assign(originalNode.physics, gn.physics);
+                // Salva como 'value' para padronizar
+                originalNode.composition = Object.entries(gn.comp).map(([k, v]) => ({ component: k, value: v }));
+            }
+        });
+
+        // Atualiza tabelas planas também (para exportação correta)
+        globalData.node_props = globalNodes.map(gn => ({
+            node_id: gn.id,
+            pressure: gn.physics.pressure,
+            flow: gn.physics.flow,
+            temperature: gn.physics.temperature,
+            volume: gn.physics.volume
+        }));
+
+        globalData.node_composition = [];
+        globalNodes.forEach(gn => {
+            Object.entries(gn.comp).forEach(([k, v]) => {
+                // Aqui salvamos tanto 'value' quanto 'fraction' para garantir compatibilidade total
+                globalData.node_composition.push({ 
+                    node_id: gn.id, 
+                    component: k, 
+                    value: v,      // Padrão novo
+                    fraction: v    // Padrão antigo/SQL
+                });
+            });
+        });
+
+        localStorage.setItem('malha_db_v2', JSON.stringify(globalData));
+        const status = document.getElementById('save-status');
+        status.style.opacity = 1;
+        setTimeout(() => status.style.opacity = 0, 1500);
+    }
+
+    init();
 </script>
 {% endblock %}

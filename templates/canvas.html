@@ -197,9 +197,8 @@
 
     // --- CRIAÇÃO DE OBJETOS ---
     
-function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
+    function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         let prefix = 'E';
-        // Se for valve, prefixo V. Se for node (qualquer tipo P,Q,I), prefixo N.
         if(type==='node') prefix='N'; 
         if(type==='valve') prefix='V';
         
@@ -207,20 +206,17 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         const name = loadName || id;
         const objs = [];
 
-        // Helper para portas
         const addPort = (lx, ly, pid) => { objs.push(new fabric.Circle({radius:3, fill:'#333', left:lx, top:ly, originX:'center', originY:'center', portId:pid, stroke:'#fff', strokeWidth:1})); };
 
         // --- DEFINIÇÃO VISUAL ---
         if (type === 'valve') {
-            // Visual de Válvula (Laranja com haste)
             objs.push(new fabric.Rect({width:30, height:16, fill:'#e67e22', stroke:'#d35400', strokeWidth:2, rx:2, ry:2, originX:'center', originY:'center'}));
             objs.push(new fabric.Line([0,-8, 0,8], {stroke:'#d35400', strokeWidth:1, originX:'center', originY:'center'})); 
             objs.push(new fabric.Text(name, {fontSize:11, fill:'#333', top: 24, originX:'center', originY:'center', fontWeight:'600', fontFamily:'Segoe UI'}));
         } else {
-            // --- TODOS OS OUTROS (P, Q, I) VIRAM NÓ AZUL ---
-            // Visual de Nó (Bolinha Azul)
+            // Todos os nós (P, Q, I) viram bolinha azul
             objs.push(new fabric.Circle({radius:8, fill:'#3498db', stroke:'#2980b9', strokeWidth:2, originX:'center', originY:'center'}));
-            addPort(0,0,0); // Porta central
+            addPort(0,0,0);
             objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:15, originX:'center', originY:'center', fontWeight:'600'}));
         }
 
@@ -229,8 +225,8 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         group.data = Object.assign({ 
             id:id, 
             name:name,
-            subType: type, // Guarda se é valve ou node
-            type: type === 'valve' ? 'valve' : 'node' // Simplificado
+            subType: type, // Visual (node ou valve)
+            type: type === 'valve' ? 'valve' : 'node'
         }, extraData);
 
         group.on('moving', () => {
@@ -262,7 +258,6 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         const head = new fabric.Triangle({width:10, height:10, fill:'#555', originX:'center', originY:'center', selectable:false, evented:false});
         const label = new fabric.Text(name, {fontSize:11, fill:'#e67e22', backgroundColor:'#fff', originX:'center', originY:'center', selectable:false, evented:false});
 
-        // Mescla dados extras (Geometria, Rugosidade)
         const sharedData = Object.assign({
             type:'duct', id, name, 
             line, head, label, p1Obj: p1, p2Obj: p2
@@ -363,7 +358,7 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         organizeLayers();
     }
 
-    // --- SALVAMENTO RELACIONAL (CRUCIAL PARA O BACKEND) ---
+    // --- SALVAMENTO (Fix: Agora salva Volume e Flow) ---
     function getModel() {
         const nodes = [];
         const valves = [];
@@ -372,12 +367,10 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         const node_props = [];
         const node_composition = [];
 
-        // 1. Processar NÓS e VÁLVULAS
         canvas.getObjects('group').forEach(o => {
             const d = o.data;
             
             if (d.type === 'valve') {
-                // Separa Válvulas para a tabela 'valves'
                 valves.push({
                     id: d.id,
                     name: d.name,
@@ -388,37 +381,27 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
                     opening: (d.props && d.props.opening) || 100,
                     status: (d.props && d.props.status) || 'open'
                 });
-                
-                // Válvulas também aparecem como nós no visualizador
-                nodes.push({
-                    id: d.id, name: d.name, x: o.left, y: o.top, type: 'valve', originalType: 'valve'
-                });
-
             } else {
-                // Nós Normais (P, Q, I)
-                // Recupera o tipo original (P, Q ou I) ou assume I
-                const realType = d.originalType || 'I';
-
                 nodes.push({
                     id: d.id,
                     name: d.name,
                     x: o.left,
                     y: o.top,
-                    type: d.subType || 'node', // Visual (node, mono...)
-                    originalType: realType     // Físico (P, Q, I)
+                    type: d.subType || 'node',
+                    originalType: d.originalType || 'I'
                 });
 
-                // Extrai Propriedades Físicas para tabela separada
                 if (d.physics) {
                     node_props.push({
                         node_id: d.id,
                         pressure: d.physics.pressure,
                         temperature: d.physics.temperature,
-                        elevation: d.physics.elevation
+                        flow: d.physics.flow, // [FIX] Adicionado
+                        volume: d.physics.volume, // [FIX] Adicionado
+                        elevation: d.physics.elevation // Mantido por compatibilidade
                     });
                 }
                 
-                // Extrai Composição para tabela separada
                 if (d.composition && Array.isArray(d.composition)) {
                     d.composition.forEach(c => {
                         node_composition.push({
@@ -431,22 +414,17 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
             }
         });
 
-        // 2. Processar DUTOS e GEOMETRIA
         canvas.getObjects('line').forEach(l => {
             const d = l.data;
-            const startId = d.p1Obj.data.linkedNode;
-            const endId = d.p2Obj.data.linkedNode;
-
             ducts.push({
                 id: d.id,
                 name: d.name,
-                start_id: startId,
-                end_id: endId,
+                start_id: d.p1Obj.data.linkedNode,
+                end_id: d.p2Obj.data.linkedNode,
                 start_port: d.p1Obj.data.linkedPort || 0,
                 end_port: d.p2Obj.data.linkedPort || 0
             });
 
-            // Extrai Geometria (Discretização) para tabela separada
             if (d.geometry && Array.isArray(d.geometry)) {
                 d.geometry.forEach(g => {
                     duct_geom.push({
@@ -454,17 +432,14 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
                         seg_index: g.seg_index,
                         length: g.length,
                         diameter: g.diameter,
-                        roughness: g.roughness
+                        roughness: g.roughness,
+                        dy: g.dy // [FIX] Importante salvar a elevação do trecho
                     });
                 });
             }
         });
 
-        return { 
-            nodes, ducts, valves, 
-            duct_geom, node_props, node_composition,
-            version: "2.1", timestamp: Date.now() 
-        };
+        return { nodes, ducts, valves, duct_geom, node_props, node_composition, version: "2.1", timestamp: Date.now() };
     }
 
     async function exportJSON() {
@@ -481,7 +456,6 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
     async function importJSON(e) {
         const file = e.target.files[0];
         if(!file) return;
-
         try {
             let jsonStr;
             if (file.name.endsWith('.gz')) {
@@ -493,17 +467,11 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
             } else {
                 jsonStr = await file.text();
             }
-
             const data = JSON.parse(jsonStr);
-            
-            // Agora a importação (adaptToNative) chama a reconstrução
-            // que popula os dados corretamente
             const mergedData = adaptToNative(data);
             reconstruct(mergedData);
-            
-            saveState(); // Salva no LocalStorage IMEDIATAMENTE após carregar
+            saveState();
             setStatus("Projeto carregado com sucesso!");
-
         } catch(err) {
             console.error(err);
             setStatus("Erro ao ler arquivo.");
@@ -520,38 +488,51 @@ function createEq(x, y, type, loadId=null, loadName=null, extraData={}) {
         if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }
     };
 
-    // --- IMPORTAÇÃO (Leitura das tabelas antigas) ---
-function adaptToNative(data) {
+    // --- IMPORTAÇÃO (Fix: Tratamento de IDs como String) ---
+// --- IMPORTAÇÃO ROBUSTA (Aceita value ou fraction) ---
+    function adaptToNative(data) {
         console.log("Processando dados...", data);
         
         const propsMap = new Map();
-        if(data.node_props) data.node_props.forEach(p => propsMap.set(p.node_id, p));
+        if(data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
 
         const compMap = new Map();
         if(data.node_composition) {
             data.node_composition.forEach(c => {
-                if(!compMap.has(c.node_id)) compMap.set(c.node_id, []);
-                compMap.get(c.node_id).push(c);
+                const id = String(c.node_id);
+                if(!compMap.has(id)) compMap.set(id, []);
+                compMap.get(id).push(c);
             });
         }
 
-        // Processa Nós
-        const nodes = (data.nodes || []).map(n => {
-            // Se for válvula, retorna direto (será tratada no passo 3)
-            if (n.type === 'valve' || n.type === 'A') return n;
+        const nodes = (data.nodes || [])
+            .filter(n => n.type !== 'valve' && n.type !== 'A') 
+            .map(n => {
+                const sid = String(n.id);
+                
+                // Recupera composição da tabela
+                let comps = compMap.get(sid) || [];
+                
+                // Se não achou na tabela, tenta do objeto (n.composition)
+                if (comps.length === 0 && n.composition) {
+                    comps = n.composition;
+                }
 
-            // --- AQUI ESTÁ A CORREÇÃO VISUAL ---
-            // Independente se é P, Q, I ou Tanque -> Visual = 'node'
-            return {
-                ...n,
-                type: 'node',     // Força visual de bolinha
-                originalType: n.originalType || n.type || 'I', // Guarda o tipo real (P, Q, I)
-                physics: propsMap.get(n.id) || {},
-                composition: compMap.get(n.id) || []
-            };
-        });
+                // Normaliza para garantir que temos 'value'
+                const normalizedComps = comps.map(c => ({
+                    component: c.component,
+                    value: (c.value !== undefined) ? c.value : c.fraction // [CORREÇÃO AQUI]
+                })).filter(c => c.value !== undefined);
 
-        // Processa Dutos e Geometria
+                return {
+                    ...n,
+                    type: 'node',
+                    originalType: n.originalType || n.type || 'I',
+                    physics: propsMap.get(sid) || {},
+                    composition: normalizedComps
+                };
+            });
+
         const geomMap = new Map();
         if (data.duct_geom) {
             data.duct_geom.forEach(g => {
@@ -563,23 +544,14 @@ function adaptToNative(data) {
         const ducts = (data.ducts || []).map(d => {
             const geom = geomMap.get(d.id) || [];
             geom.sort((a,b) => a.seg_index - b.seg_index);
-            return {
-                ...d,
-                geometry: geom
-            };
+            return { ...d, geometry: geom };
         });
 
-        // Processa Válvulas (Tabela separada -> Lista de Nós Visuais)
         if (data.valves) {
             data.valves.forEach(v => {
                 nodes.push({
-                    id: v.id,
-                    name: v.name,
-                    type: 'valve',
-                    attachedTo: v.duct_id || v.ductId,
-                    ratio: v.t !== undefined ? v.t : 0.5,
-                    originalType: v.type, // Ex: 'A'
-                    props: v // Guarda cv, opening, status
+                    id: v.id, name: v.name, type: 'valve', attachedTo: v.duct_id || v.ductId,
+                    ratio: v.t !== undefined ? v.t : 0.5, originalType: v.type, props: v
                 });
             });
         }
@@ -591,29 +563,21 @@ function adaptToNative(data) {
         canvas.clear(); canvas.setBackgroundColor('#fff');
         let maxN=0, maxD=0, maxV=0;
         
-        // 1. Cria Nós e Equipamentos
         data.nodes.forEach(n => {
             const num = parseInt(n.id.replace(/\D/g, ''))||0;
             if(n.type==='valve') { if(num>maxV) maxV=num; } else { if(num>maxN) maxN=num; }
-            
-            // Passa os dados completos para serem guardados no group.data
             createEq(n.x || 100, n.y || 100, n.type, n.id, n.name, n); 
         });
 
-        // 2. Cria Dutos
         data.ducts.forEach(d => {
             const num = parseInt(d.id.replace(/\D/g, ''))||0; if(num>maxD) maxD=num;
-            
             const line = createDuct(0,0,d.id,d.name, d); 
-
-            // Reconecta Dutos
             const link = (p, nid, pid) => {
                 if(!nid) return;
                 const g = canvas.getObjects('group').find(x=>x.data.id===nid);
                 if(g) {
                     const m = g.calcTransformMatrix(); 
-                    let port = g.getObjects().find(o=>o.portId===pid);
-                    if(!port) port = g.getObjects().find(o=>o.portId!==undefined);
+                    let port = g.getObjects().find(o=>o.portId===pid) || g.getObjects().find(o=>o.portId!==undefined);
                     if(port) {
                         const gp = fabric.util.transformPoint(new fabric.Point(port.left,port.top), m);
                         p.set({left:gp.x, top:gp.y, fill:'#27ae60'}); 
@@ -626,12 +590,9 @@ function adaptToNative(data) {
             line.data.p1Obj.fire('moving'); 
         });
 
-        // 3. Reconecta Válvulas
         data.nodes.filter(n => n.type === 'valve').forEach(v => {
             const grp = canvas.getObjects('group').find(x=>x.data.id===v.id);
-            // Procura o duto pelo ID (attachedTo veio do import)
             const ln = canvas.getObjects('line').find(x=>x.data.id===v.attachedTo);
-            
             if(grp && ln) {
                 grp.data.attachedDuctId = v.attachedTo; 
                 grp.data.ratio = v.ratio;
@@ -647,7 +608,6 @@ function adaptToNative(data) {
     const saved = localStorage.getItem(STORAGE_KEY);
     if(saved) {
         const d = JSON.parse(saved);
-        // Garante que dados carregados do storage passem pelo adaptador também
         const ready = adaptToNative(d);
         reconstruct(ready);
     }
