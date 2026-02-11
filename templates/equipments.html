@@ -2,68 +2,86 @@
 {% block content %}
 <style>
     .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
-    .card { background: white; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-    .tag { font-weight: bold; font-size: 18px; color: #0078d7; }
-    .type { background: #eee; padding: 3px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; }
     
-    .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
-    .field label { display: block; font-size: 13px; color: #666; margin-bottom: 5px; }
-    .field input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+    .card { background: white; border: 1px solid #ddd; border-left: 4px solid #0078d7; border-radius: 4px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .card.valve { border-left-color: #e67e22; } /* Laranja para válvulas */
+    
+    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
+    .tag { font-weight: bold; font-size: 16px; color: #333; }
+    .type-label { background: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase; color: #666; font-weight: bold; }
+    
+    .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+    .field label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+    .field input { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; color: #333; }
+    .location-info { grid-column: 1 / -1; background: #fafafa; padding: 8px; font-size: 12px; color: #555; border-radius: 3px; margin-bottom: 10px; }
 </style>
 
 <div class="page-content">
-    <h2>Lista de Equipamentos</h2>
+    <h2>Equipamentos & Válvulas</h2>
+    <p style="margin-bottom:20px; color:#666">Configuração de acessórios e máquinas.</p>
     <div id="cards-container"></div>
 </div>
 
 <script>
-    fetch('/api/get-mesh').then(r => r.json()).then(data => {
-        const container = document.getElementById('cards-container');
-        
-        // Filtra apenas equipamentos reais (ignora nós simples por enquanto)
-        const equips = data.nodes.filter(n => ['pump', 'comp', 'sep'].includes(n.type));
+    function loadAndJoin() {
+        const raw = localStorage.getItem('malha_db_v2');
+        if (!raw) return { items: [] };
+        const data = JSON.parse(raw);
 
-        equips.forEach(eq => {
-            const card = document.createElement('div');
-            card.className = 'card';
+        // Mapa de Válvulas (Propriedades)
+        const valvePropsMap = new Map();
+        if(data.valves) data.valves.forEach(v => valvePropsMap.set(v.id, v));
+
+        // Mapa de Dutos (Para pegar nomes)
+        const ductMap = new Map();
+        if(data.ducts) data.ducts.forEach(d => ductMap.set(d.id, d));
+
+        // Filtra nós que são válvulas
+        const valves = (data.nodes || []).filter(n => n.type === 'valve').map(n => {
+            // Tenta pegar propriedades da tabela 'valves' ou do próprio nó
+            const tableProps = valvePropsMap.get(n.id) || {};
             
-            let fields = '';
-            if (eq.type === 'pump') {
-                fields = `
-                    <div class="field"><label>Potência (HP)</label><input type="number" value="50"></div>
-                    <div class="field"><label>Eficiência (%)</label><input type="number" value="75"></div>
-                    <div class="field"><label>Curva (Head max)</label><input type="number" value="100"></div>
-                `;
-            } else if (eq.type === 'comp') {
-                fields = `
-                    <div class="field"><label>Razão de Compressão</label><input type="number" value="3.5"></div>
-                    <div class="field"><label>Temperatura Descarga (°C)</label><input type="number" value="120"></div>
-                    <div class="field"><label>Rotação (RPM)</label><input type="number" value="1500"></div>
-                `;
-            } else {
-                fields = `
-                    <div class="field"><label>Volume (m³)</label><input type="number" value="10"></div>
-                    <div class="field"><label>Pressão Operação (bar)</label><input type="number" value="20"></div>
-                    <div class="field"><label>Eficiência Separação</label><input type="number" value="0.98"></div>
-                `;
-            }
+            // Link com Duto
+            const ductId = n.attachedTo || n.attachedDuctId || tableProps.duct_id;
+            const ductName = ductMap.has(ductId) ? ductMap.get(ductId).name : ductId;
 
-            let typeName = eq.type === 'pump' ? 'Bomba' : eq.type === 'comp' ? 'Compressor' : 'Separador';
-
-            card.innerHTML = `
-                <div class="card-header">
-                    <span class="tag">${eq.name}</span>
-                    <span class="type">${typeName}</span>
-                </div>
-                <div class="grid-form">${fields}</div>
-            `;
-            container.appendChild(card);
+            return {
+                ...n,
+                props: { ...tableProps, ...n.props }, // Merge de props
+                ductName: ductName,
+                ratio: n.ratio !== undefined ? n.ratio : (tableProps.t !== undefined ? tableProps.t : 0.5)
+            };
         });
 
-        if (equips.length === 0) {
-            container.innerHTML = '<p style="color:#777; text-align:center;">Nenhum equipamento especial adicionado (Bombas, Compressores...). Adicione-os no Canvas.</p>';
-        }
+        return { items: valves };
+    }
+
+    const { items } = loadAndJoin();
+    const container = document.getElementById('cards-container');
+    
+    items.forEach(eq => {
+        const card = document.createElement('div');
+        card.className = 'card valve'; // Estilo laranja
+        
+        const typeName = `Válvula (${eq.originalType || 'A'})`;
+        const posPerc = Math.round((eq.ratio || 0.5) * 100);
+        const p = eq.props || {};
+
+        card.innerHTML = `
+            <div class="card-header">
+                <span class="tag">${eq.name}</span>
+                <span class="type-label">${typeName}</span>
+            </div>
+            <div class="location-info">📍 Instalada no duto <strong>${eq.ductName || '?'}</strong> a ${posPerc}% do início.</div>
+            <div class="grid-form">
+                <div class="field"><label>Abertura (%)</label><input type="number" value="${p.opening !== undefined ? p.opening : 100}"></div>
+                <div class="field"><label>CV (Coef. Vazão)</label><input type="number" value="${p.cv !== undefined ? p.cv : 50}"></div>
+                <div class="field"><label>Estado</label><input type="text" value="${p.status || 'Aberta'}" readonly></div>
+            </div>
+        `;
+        container.appendChild(card);
     });
+
+    if (items.length === 0) container.innerHTML = '<p style="color:#777; text-align:center; padding: 40px;">Nenhuma válvula encontrada.</p>';
 </script>
 {% endblock %}

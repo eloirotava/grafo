@@ -1,72 +1,105 @@
 {% extends "layout.html" %}
 {% block content %}
 <style>
-    .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
+    .page-content { padding: 30px; width: 100%; max-width: 1200px; margin: 0 auto; }
     h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 20px; }
     
-    /* Estilo de Tabela Profissional */
-    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; }
-    .data-table th, .data-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; font-size: 13px; }
+    .data-table th, .data-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
     .data-table th { background-color: #f8f9fa; font-weight: 600; color: #444; border-bottom: 2px solid #ddd; }
     .data-table tr:hover { background-color: #f1f1f1; }
     
-    /* Inputs dentro da tabela */
-    .input-cell { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3px; }
-    .type-badge { background-color: #3498db; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; text-transform: uppercase; }
+    .input-cell { width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+    .type-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; color: white; min-width: 25px; display: inline-block; text-align: center; }
+    .type-P { background-color: #27ae60; } /* Verde - Pressão */
+    .type-Q { background-color: #e67e22; } /* Laranja - Vazão */
+    .type-I { background-color: #2980b9; } /* Azul - Interno */
     
-    .coord { font-family: monospace; color: #666; font-size: 0.9em; }
+    .coord { font-family: monospace; color: #888; font-size: 0.85em; }
+    .comp-list { font-size: 0.85em; color: #555; }
 </style>
 
 <div class="page-content">
-    <h2>Configuração de Nós (Junções e Tanques)</h2>
-    <p style="color: #666; margin-bottom: 20px;">Defina as condições de contorno (Pressão e Elevação) para os pontos de conexão.</p>
+    <h2>Nós (Junções e Fronteiras)</h2>
+    <p style="color: #666; margin-bottom: 20px;">Propriedades físicas e composição dos pontos da malha.</p>
 
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width: 15%;">Tag (Nome)</th>
-                <th style="width: 10%;">Tipo</th>
-                <th style="width: 20%;">Coordenadas (Canvas)</th>
-                <th style="width: 20%;">Elevação (m)</th>
-                <th style="width: 20%;">Pressão Inicial (bar)</th>
-                <th style="width: 15%;">Tipo de Fronteira</th>
+                <th style="width: 10%;">Tag</th>
+                <th style="width: 8%;">Tipo</th>
+                <th style="width: 15%;">Pressão (bar)</th>
+                <th style="width: 15%;">Temp (°C)</th>
+                <th style="width: 15%;">Elevação (m)</th>
+                <th style="width: 25%;">Composição (% Molar)</th>
+                <th style="width: 12%;">Coords</th>
             </tr>
         </thead>
-        <tbody id="nodes-body">
-            </tbody>
+        <tbody id="nodes-body"></tbody>
     </table>
 </div>
 
 <script>
-    fetch('/api/get-mesh').then(r => r.json()).then(data => {
-        const tbody = document.getElementById('nodes-body');
+    function loadAndJoin() {
+        const raw = localStorage.getItem('malha_db_v2');
+        if (!raw) return [];
+        const data = JSON.parse(raw);
         
-        // Filtra APENAS o que é 'node' (exclui bombas, compressores, etc)
-        const nodes = data.nodes.filter(n => n.type === 'node');
-
-        nodes.forEach(n => {
-            const tr = document.createElement('tr');
-            
-            tr.innerHTML = `
-                <td><strong>${n.name}</strong></td>
-                <td><span class="type-badge">Nó/Tanque</span></td>
-                <td class="coord">X: ${Math.round(n.x)}, Y: ${Math.round(n.y)}</td>
-                <td><input type="number" class="input-cell" value="0.0" placeholder="0.0"></td>
-                <td><input type="number" class="input-cell" value="1.01" placeholder="atm"></td>
-                <td>
-                    <select class="input-cell">
-                        <option>Interno</option>
-                        <option>Fonte (Source)</option>
-                        <option>Sumidouro (Sink)</option>
-                    </select>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        if (nodes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#888;">Nenhum nó simples encontrado. Adicione "Nó" na tela de Canvas.</td></tr>';
+        // Mapas auxiliares para cruzamento de dados (JOIN)
+        const propsMap = new Map();
+        if(data.node_props) data.node_props.forEach(p => propsMap.set(p.node_id, p));
+        
+        const compMap = new Map();
+        if(data.node_composition) {
+            data.node_composition.forEach(c => {
+                if(!compMap.has(c.node_id)) compMap.set(c.node_id, []);
+                compMap.get(c.node_id).push(c);
+            });
         }
+
+        // Retorna nós 'hidratados'
+        return (data.nodes || []).filter(n => n.type !== 'valve').map(n => {
+            return {
+                ...n,
+                // Prioriza o dado que já está dentro (se houver), senão busca na tabela
+                physics: n.physics || propsMap.get(n.id) || {},
+                composition: n.composition || compMap.get(n.id) || []
+            };
+        });
+    }
+
+    const nodes = loadAndJoin();
+    const tbody = document.getElementById('nodes-body');
+    
+    nodes.forEach(n => {
+        const tr = document.createElement('tr');
+        
+        let realType = n.originalType || 'I';
+        const phys = n.physics || {};
+        
+        // Pega valores com fallback
+        const press = phys.pressure !== undefined ? phys.pressure : 1.01;
+        const temp = phys.temperature !== undefined ? phys.temperature : 25.0;
+        const elev = phys.elevation !== undefined ? phys.elevation : 0.0; // Agora pega elevação também? No json anterior não tinha vazão explicita na prop física, mas ok.
+
+        // Formata Composição
+        let compStr = '-';
+        if (n.composition && n.composition.length > 0) {
+            compStr = n.composition.map(c => `<b>${c.component}</b>: ${c.value}%`).join(', ');
+        }
+
+        tr.innerHTML = `
+            <td><strong>${n.name}</strong></td>
+            <td><span class="type-badge type-${realType}">${realType}</span></td>
+            <td><input type="number" class="input-cell" value="${press}" step="0.1"></td>
+            <td><input type="number" class="input-cell" value="${temp}" step="1"></td>
+            <td><input type="number" class="input-cell" value="${elev}" step="1"></td>
+            <td class="comp-list">${compStr}</td>
+            <td class="coord">X:${Math.round(n.x)} Y:${Math.round(n.y)}</td>
+        `;
+        tbody.appendChild(tr);
     });
+
+    if (nodes.length === 0) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#888;">Nenhum nó encontrado.</td></tr>';
 </script>
 {% endblock %}
