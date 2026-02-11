@@ -241,15 +241,24 @@
         finally { btn.disabled = false; }
     }
 
-    function renderResults(m) {
-        document.getElementById('results-area').style.display = 'block';
-        const view = m.map(r=>[r[0]/1e5, r[1]-273.15, r[2], r[3]]);
-        let h = '<table class="excel-table"><thead><tr><th>#</th><th>P (bar)</th><th>T (C)</th><th>Q</th><th>Rho</th></tr></thead><tbody>';
-        view.forEach((r,i) => {
-            if(Math.abs(r[0]) < 1e-5) return;
-            h+=`<tr><td>${i}</td><td class="num">${r[0].toFixed(2)}</td><td class="num">${r[1].toFixed(1)}</td><td class="num">${r[2].toFixed(4)}</td><td class="num">${r[3].toFixed(2)}</td></tr>`;
-        });
-        document.getElementById('res-table-container').innerHTML = h + '</tbody></table>';
-    }
+function renderResults(m) {
+    document.getElementById('results-area').style.display = 'block';
+    
+    // --- NOVO: Salva dados completos para o Relatório ---
+    localStorage.setItem('last_sim_report', JSON.stringify({
+        results: m,
+        geometria: GLOBAL_BUILT_DATA.geometria_in,
+        dutos: GLOBAL_BUILT_DATA.dutos_in,
+        dutos_view: GLOBAL_BUILT_DATA.dutos_view
+    }));
+
+    const view = m.map(r=>[r[0]/1e5, r[1]-273.15, r[2]]);
+    let h = '<table class="excel-table"><thead><tr><th>#</th><th>P (bar)</th><th>T (°C)</th><th>Q</th></tr></thead><tbody>';
+    view.forEach((r,i) => {
+        if(Math.abs(r[0]) < 1e-5) return;
+        h+=`<tr><td>${i}</td><td class="num">${r[0].toFixed(2)}</td><td class="num">${r[1].toFixed(1)}</td><td class="num">${r[2].toFixed(4)}</td></tr>`;
+    });
+    document.getElementById('res-table-container').innerHTML = h + '</tbody></table>';
+}
 </script>
 {% endblock %}
