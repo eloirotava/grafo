@@ -10,6 +10,9 @@ const ASSETS_TO_CACHE = [
     '/help',
     '/static/js/fabric.min.js',
     '/static/js/chart.js',
+    '/static/js/wrapper.js',  
+    '/static/wasm/fluxo.js',  
+    '/static/wasm/fluxo.wasm',
     '/static/manifest.json' // Adicionei o manifesto se você criou
 ];
 
