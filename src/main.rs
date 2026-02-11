@@ -69,9 +69,8 @@ async fn main() {
         .route("/static/*file", get(static_handler));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
-    println!("🚀 SERVER OFFLINE MODE: http://{}", addr);
-    println!("📦 Tudo embutido no executável. Banco de dados removido.");
-
+    println!("SERVER: http://{}", addr);
+    
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
