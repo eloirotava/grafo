@@ -1,229 +1,357 @@
 {% extends "layout.html" %}
 {% block content %}
 <style>
-    .page-content { padding: 30px; width: 100%; max-width: 1200px; margin: 0 auto; }
-    .sim-controls { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd; display: flex; gap: 15px; align-items: center; }
-    .btn-run { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .page-content { padding: 30px; width: 100%; max-width: 1400px; margin: 0 auto; }
+    
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .panel { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .panel h3 { margin-top: 0; font-size: 16px; color: #0078d7; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+    
+    .form-group { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .form-group label { font-size: 13px; font-weight: 600; color: #555; }
+    .form-group input, .form-group select { width: 120px; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; text-align: right; }
+
+    .sim-controls { padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd; display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
+    .btn-run { background: #28a745; color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; transition: background 0.2s; }
     .btn-run:hover { background: #218838; }
     .btn-run:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-preview { background: #6c757d; }
     
-    .status-box { padding: 10px; border-radius: 4px; font-family: monospace; font-size: 13px; background: #333; color: #0f0; margin-bottom: 20px; min-height: 40px; }
+    .status-box { padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; background: #222; color: #0f0; margin-bottom: 20px; min-height: 60px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
     
-    .results-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 20px; }
-    .results-table th { background: #eee; text-align: left; padding: 8px; border-bottom: 2px solid #ccc; }
-    .results-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-    .val-cell { font-family: monospace; color: #0078d7; font-weight: bold; }
+    /* ÁREA DE INSPEÇÃO */
+    .preview-area { margin-bottom: 30px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+    .preview-tabs { display: flex; background: #f1f1f1; border-bottom: 1px solid #ccc; overflow-x: auto; }
+    .tab-btn { padding: 8px 15px; cursor: pointer; border: none; background: none; font-size: 12px; font-weight: bold; color: #555; border-right: 1px solid #ddd; white-space: nowrap; }
+    .tab-btn:hover { background: #e9e9e9; }
+    .tab-btn.active { background: #fff; color: #0078d7; border-bottom: 3px solid #0078d7; margin-bottom: -1px; }
+    
+    .tab-content { display: none; padding: 0; overflow: auto; max-height: 500px; }
+    .tab-content.active { display: block; }
+
+    /* MEMORY DUMP */
+    .memory-dump { padding: 15px; font-family: 'Consolas', monospace; font-size: 11px; background: #1e1e1e; color: #d4d4d4; }
+    .mem-section { margin-bottom: 25px; border-left: 2px solid #555; padding-left: 10px; }
+    .mem-header { color: #fff; font-weight: bold; font-size: 13px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 2px; display:inline-block;}
+    .mem-row { display: flex; margin-bottom: 2px; }
+    .mem-label { color: #569cd6; min-width: 150px; }
+    .mem-val { color: #b5cea8; }
+    .mem-array { color: #ce9178; word-break: break-all; margin-top:3px; display:block; }
+    .mem-note { color: #6a9955; font-style: italic; margin-left: 10px; }
+
+    /* ESTILO EXCEL */
+    .excel-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', sans-serif; white-space: nowrap; }
+    .excel-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 6px; text-align: left; color: #333; position: sticky; top: 0; z-index: 10; font-weight: 600; }
+    .excel-table td { border: 1px solid #ddd; padding: 4px 6px; color: #333; }
+    .excel-table tr:nth-child(even) { background-color: #fcfcfc; }
+    .excel-table td.num { text-align: right; font-family: 'Consolas', monospace; color: #0056b3; }
+    
+    .results-area { display: none; margin-top:20px; border-top: 2px solid #0078d7; padding-top:20px; }
 </style>
 
 <div class="page-content">
     <h2>Simulação (Solver WASM)</h2>
     
-    <div class="sim-controls">
-        <button id="btn-simular" class="btn-run" onclick="iniciarSimulacao()">
-            <span>▶</span> Rodar Simulação
-        </button>
-        <div style="flex:1">
-            <label><input type="checkbox" checked> Permanente</label>
-            <label style="margin-left:15px; color:#999"><input type="checkbox" disabled> Transiente (Em breve)</label>
+    <div class="config-grid">
+        <div class="panel">
+            <h3>1. Controle & Convergência</h3>
+            <div class="form-group"><label>Rastreio (Track)</label><input type="number" id="inp-track" value="1"></div>
+            <div class="form-group"><label>Relaxação</label><input type="number" id="inp-relax" value="1" step="0.1"></div>
+            <div class="form-group"><label>Tolerância</label><input type="text" id="inp-tol" value="1e-3"></div>
+        </div>
+        <div class="panel">
+            <h3>2. Tempo</h3>
+            <div class="form-group">
+                <label>Regime</label>
+                <select id="sim-mode" onchange="toggleTimeInput()">
+                    <option value="steady">Permanente (1e90)</option>
+                    <option value="transient">Transiente</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Tempo Total</label><input type="number" id="inp-t" value="60" disabled style="background:#eee"></div>
         </div>
     </div>
 
-    <div id="console-log" class="status-box">Aguardando comando...</div>
+    <div class="sim-controls">
+        <button class="btn-run btn-preview" onclick="prepararDados()">1. Preparar Dados (Ver Memória)</button>
+        <button id="btn-simular" class="btn-run" onclick="rodarWASM()" disabled style="background:#0078d7; opacity: 0.5;">2. Rodar Solver ▶</button>
+    </div>
 
-    <div id="results-area" style="display:none;">
-        <h3>Resultados (Condições Iniciais Calculadas)</h3>
-        <table class="results-table">
-            <thead>
-                <tr>
-                    <th>Índice</th>
-                    <th>Tipo</th>
-                    <th>Pressão (Pa)</th>
-                    <th>Temperatura (K)</th>
-                    <th>Vazão (kg/s)</th>
-                    <th>Densidade</th>
-                </tr>
-            </thead>
-            <tbody id="res-body"></tbody>
-        </table>
+    <div id="console-log" class="status-box">Aguardando preparação...</div>
+
+    <div id="preview-container" class="preview-area" style="display:none;">
+        <div class="preview-tabs">
+            <button class="tab-btn active" onclick="openTab('tab-mem')">🖥️ Memória (O que entra no C++)</button>
+            <button class="tab-btn" onclick="openTab('tab-dutos')">Dutos (Conectividade)</button>
+            <button class="tab-btn" onclick="openTab('tab-geom')">Geometria</button>
+            <button class="tab-btn" onclick="openTab('tab-nos')">Nós (Valores)</button>
+            <button class="tab-btn" onclick="openTab('tab-ci')">Condição Inicial</button>
+        </div>
+        
+        <div id="tab-mem" class="tab-content active">
+            <div id="memory-dump-content" class="memory-dump"></div>
+        </div>
+
+        <div id="tab-dutos" class="tab-content"></div>
+        <div id="tab-nos" class="tab-content"></div>
+        <div id="tab-geom" class="tab-content"></div>
+        <div id="tab-ci" class="tab-content"></div>
+    </div>
+
+    <div id="results-area" class="results-area">
+        <h3>Resultados Finais</h3>
+        <div id="res-table-container" style="overflow-x:auto; border:1px solid #ddd;"></div>
     </div>
 </div>
 
 <script type="module">
     import { runFluxo } from '/static/js/wrapper.js';
-    window.runFluxoLib = runFluxo; // Expõe para o escopo global
+    window.runFluxoLib = runFluxo; 
 </script>
 
 <script>
-    const logEl = document.getElementById('console-log');
-    function log(msg) { logEl.innerText = msg; console.log(msg); }
+    let GLOBAL_BUILT_DATA = null; 
 
-    // --- 1. PREPARAR DADOS (BRIDGE) ---
-    function buildSimulationData() {
-        const raw = localStorage.getItem('malha_db_v2');
-        if (!raw) throw new Error("Nenhum projeto salvo encontrado.");
-        const data = JSON.parse(raw);
+    function log(msg) { 
+        const el = document.getElementById('console-log');
+        el.innerText += `\n> ${msg}`; 
+        el.scrollTop = el.scrollHeight;
+    }
 
-        // Mapeamentos de ID -> Índice Numérico
-        const nodeMap = new Map();
-        const nodes = (data.nodes || []).filter(n => n.type !== 'valve');
-        nodes.forEach((n, i) => nodeMap.set(n.id, i)); // Mapeia ID "N01" -> 0
+    function toggleTimeInput() {
+        const mode = document.getElementById('sim-mode').value;
+        const inp = document.getElementById('inp-t');
+        if (mode === 'steady') { inp.value = "1e90"; inp.disabled = true; inp.style.background = "#eee"; }
+        else { inp.value = "60"; inp.disabled = false; inp.style.background = "#fff"; }
+    }
 
-        const n_dutos = data.ducts.length;
-        const n_nos = nodes.length;
-        
-        // Coleta TODOS os trechos de geometria em ordem linear
-        // O solver espera uma lista plana de trechos, e a matriz de dutos aponta quais trechos pertencem a quem?
-        // OU o solver espera que 'geometria_in' seja uma lista de TODOS os trechos de TODOS os dutos.
-        // Vou assumir que geometria_in deve ter todos os segmentos sequenciais.
-        
-        const geometria_in = [];
-        const dutos_in = [];
-        let geomOffset = 0;
+    function getNumericParams() {
+        const mode = document.getElementById('sim-mode').value;
+        const t = mode === 'steady' ? 1e90 : (parseFloat(document.getElementById('inp-t').value) || 60);
+        return [
+            t, 
+            parseFloat(document.getElementById('inp-track').value) || 1,
+            parseFloat(document.getElementById('inp-relax').value) || 1,
+            parseFloat(document.getElementById('inp-tol').value) || 1e-3
+        ];
+    }
 
-        data.ducts.forEach((d, idx) => {
-            const startIdx = nodeMap.get(d.start_id);
-            const endIdx = nodeMap.get(d.end_id);
+    // ACHATAMENTO (Column-Major)
+    function flattenColMajor(rows, cols, matrix) {
+        const result = [];
+        for (let j = 0; j < cols; j++) { 
+            for (let i = 0; i < rows; i++) { 
+                result.push(matrix[i][j]);
+            }
+        }
+        return result;
+    }
+
+    function prepararDados() {
+        try {
+            const raw = localStorage.getItem('malha_db_v2');
+            if (!raw) throw new Error("Malha vazia!");
+            const data = JSON.parse(raw);
+
+            const propsMap = new Map();
+            if (data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
+
+            const nodeMap = new Map(); // ID -> Index
+            const nodeNameMap = new Map(); // ID -> Nome Real
+
+            const nodes = (data.nodes || [])
+                .filter(n => n.type !== 'valve' && n.type !== 'A')
+                .map(n => {
+                    const saved = propsMap.get(String(n.id)) || {};
+                    return { ...n, physics: { ...(n.physics||{}), ...saved } };
+                });
+
+            nodes.forEach((n, i) => {
+                nodeMap.set(n.id, i);
+                nodeNameMap.set(n.id, n.name);
+            });
+
+            const geometria_in = [];
+            const dutos_in = [];
+            const dutos_view = []; // Para exibição humana
             
-            // Busca segmentos deste duto
-            const segs = data.duct_geom.filter(g => g.duct_id === d.id);
-            segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
-            
-            // Se não tiver geometria, cria dummy (ou avisa erro)
-            if (segs.length === 0) segs.push({L:10, D:0.1, rug:0.000045, dy:0, U:0, aco:0, Tamb:298});
+            data.ducts.forEach(d => {
+                const segs = data.duct_geom ? data.duct_geom.filter(g => g.duct_id === d.id) : [];
+                segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
+                
+                if (segs.length === 0) segs.push({L:100, dy:0, D:0.1, rug:4.5e-5, U:0, aco:0, Tamb:298});
 
-            segs.forEach(s => {
-                // Matriz [L, dy, D, rug, U, aco, Tamb]
-                geometria_in.push([
-                    parseFloat(s.L || s.length || 0),
-                    parseFloat(s.dy || 0),
-                    parseFloat(s.D || s.diameter || 0.1),
-                    parseFloat(s.rug || s.roughness || 0.000045),
-                    parseFloat(s.U || 0),
-                    parseFloat(s.aco || 0),
-                    parseFloat(s.Tamb || 298)
+                segs.forEach(s => {
+                    geometria_in.push([
+                        parseFloat(s.L||0), parseFloat(s.dy||0), parseFloat(s.D||0.1), 
+                        parseFloat(s.rug||4.5e-5), parseFloat(s.U||0), parseFloat(s.aco||0), parseFloat(s.Tamb||298)
+                    ]);
+                });
+                
+                const startIdx = nodeMap.get(d.start_id);
+                const endIdx = nodeMap.get(d.end_id);
+
+                // Matriz para o Solver (Apenas números)
+                dutos_in.push([segs.length, startIdx, endIdx]);
+
+                // Matriz para o Humano (Com nomes)
+                dutos_view.push([
+                    d.name,
+                    segs.length,
+                    nodeNameMap.get(d.start_id) || d.start_id,
+                    nodeNameMap.get(d.end_id) || d.end_id,
+                    startIdx,
+                    endIdx
                 ]);
             });
 
-            // Matriz Dutos: [indice_no_origem, indice_no_destino, qtd_trechos]
-            // Nota: O wrapper faz o flatten, mas precisamos saber a ordem.
-            // Geralmente solvers precisam saber onde começa a geometria. 
-            // *Assumindo aqui que o solver itera geometria na mesma ordem dos dutos*
-            dutos_in.push([startIdx, endIdx, segs.length]);
-        });
+            // Lógica NÓS
+            const nos_in = nodes.map(n => {
+                const t = n.originalType || 'I';
+                const phys = n.physics || {};
+                
+                let val1 = 0;
+                if (t === 'P') val1 = phys.pressure ?? 101325;
+                else if (t === 'Q') val1 = phys.flow ?? 0;
+                else if (t === 'I') val1 = phys.volume ?? 0;
 
-        // Nós: [Pressão, Temperatura] (Estimativas iniciais ou condições de contorno)
-        const nos_in = nodes.map(n => {
-            const p = (n.physics && n.physics.pressure) ? n.physics.pressure * 100000 : 101325; // Bar -> Pa
-            const t = (n.physics && n.physics.temperature) ? n.physics.temperature + 273.15 : 298.15; // C -> K
-            return [p, t];
-        });
+                let val2 = phys.temperature ?? 298.15; 
 
-        // Tipos de Nós: [Tipo] (Inteiro: 0=I, 1=P, 2=Q, etc. - Precisa confirmar seu ENUM no C++)
-        // Vou chutar: 0=I, 1=P, 2=Q
-        const tipos_nos_in = nodes.map(n => {
-            const t = n.originalType || 'I';
-            if (t === 'P') return 1;
-            if (t === 'Q') return 2;
-            return 0; // I
-        });
+                return [val1, val2];
+            });
 
-        // Composição (14 componentes)
-        const composicao_nos_in = nodes.map(n => {
-            // Cria vetor de 14 zeros
-            const v = Array(14).fill(0);
-            if (n.composition) {
-                // Mapear nomes C1, C2 para índices 0..13. 
-                // Exemplo simplificado. Você precisa de um mapa exato: {'C1': 2, ...}
-                // Vou preencher 1.0 no primeiro componente se vazio
-                v[0] = 1.0; 
-            } else {
-                v[0] = 1.0;
-            }
-            return v;
-        });
+            const tipos_nos_in = nodes.map(n => (n.originalType || 'I').charCodeAt(0));
 
-        // Equipamentos (Válvulas)
-        const equip_in = [];
-        const tipos_equip_in = [];
-        const val_equip = [];
-        
-        // Matriz de Condição Inicial (Dummy para alocar memória)
-        // Linhas = total_trechos + total_dutos (conforme seu wrapper: ci_rows = n_trechos + n_dutos)
-        const n_trechos = geometria_in.length;
-        const ci_rows = n_trechos + n_dutos;
-        const cond_inic_in = Array.from({length: ci_rows}, () => Array(17).fill(0));
+            const compOrder = ['N2','CO2','C1','C2','C3','iC4','nC4','iC5','nC5','C6','C7','C8','C9','C10'];
+            const composicao_nos_in = nodes.map(n => {
+                const vec = new Array(14).fill(0);
+                let hasComp = false;
+                if (n.composition) n.composition.forEach(c => {
+                    const idx = compOrder.indexOf(c.component.toUpperCase());
+                    if (idx >= 0) { vec[idx] = parseFloat(c.value); hasComp = true; }
+                });
+                if (!hasComp) vec[2] = 100.0; 
+                return vec;
+            });
 
-        return {
-            dutos_in,
-            geometria_in,
-            nos_in,
-            tipos_nos_in,
-            composicao_nos_in,
-            equip_in,
-            tipos_equip_in,
-            val_equip,
-            numerico: [1e-6, 100], // Tolerancia, Iterações
-            cond_inic_in
-        };
-    }
+            const equip_in = [], tipos_equip_in = [], val_equip = [];
+            const valves = (data.valves || []).concat((data.nodes||[]).filter(n => n.type === 'valve'));
+            const ductIdToIndex = new Map(data.ducts.map((d, i) => [d.id, i]));
 
-    // --- 2. EXECUTAR ---
-    async function iniciarSimulacao() {
-        const btn = document.getElementById('btn-simular');
-        try {
-            btn.disabled = true;
-            log("Preparando dados da malha...");
+            valves.forEach(v => {
+                const dIdx = ductIdToIndex.get(v.duct_id || v.attachedTo);
+                if (dIdx !== undefined) {
+                    equip_in.push([dIdx, parseInt(v.seg_index || 0)]);
+                    tipos_equip_in.push((v.type || 'A').charCodeAt(0));
+                    val_equip.push(parseFloat(v.value || 0));
+                }
+            });
+
+            const n_trechos = geometria_in.length;
+            const ci_rows = n_trechos + data.ducts.length;
+            const defaultCI = [5000000, 300, 1, 0, 0, 5, 95, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            const cond_inic_in = Array.from({length: ci_rows}, () => [...defaultCI]);
+
+            GLOBAL_BUILT_DATA = {
+                dutos_in, dutos_view, geometria_in, nos_in, tipos_nos_in, composicao_nos_in,
+                equip_in, tipos_equip_in, val_equip,
+                numerico: getNumericParams(),
+                cond_inic_in
+            };
+
+            renderDebug(GLOBAL_BUILT_DATA);
             
-            // 1. Constrói o objeto 'built'
-            const builtData = buildSimulationData();
-            log(`Malha: ${builtData.nos_in.length} Nós, ${builtData.dutos_in.length} Dutos, ${builtData.geometria_in.length} Trechos.`);
-
-            // 2. Chama o Wrapper (WASM)
-            log("Carregando solver WASM...");
-            if (!window.runFluxoLib) throw new Error("Biblioteca WASM ainda não carregou.");
-            
-            const startT = performance.now();
-            
-            // Chama a função exportada pelo wrapper
-            const resultado = await window.runFluxoLib(builtData, 'Fluxo_TS_WASM');
-            
-            const endT = performance.now();
-            log(`Simulação concluída em ${(endT - startT).toFixed(2)}ms! Retorno: ${resultado.ret}`);
-
-            // 3. Exibe Resultados
-            exibirResultados(resultado.cond_inic_in, builtData);
+            const btnSim = document.getElementById('btn-simular');
+            btnSim.disabled = false;
+            btnSim.style.opacity = "1";
+            log("Dados preparados! Verifique a aba MEMÓRIA.");
 
         } catch (e) {
-            log("Erro: " + e.message);
-            console.error(e);
-        } finally {
-            btn.disabled = false;
+            log("Erro: " + e.message); console.error(e);
         }
     }
 
-    function exibirResultados(matrizResultados, inputData) {
-        const tbody = document.getElementById('res-body');
-        tbody.innerHTML = '';
-        document.getElementById('results-area').style.display = 'block';
+    // --- VISUALIZADOR DE MEMÓRIA ---
+    function renderDebug(data) {
+        document.getElementById('preview-container').style.display = 'flex';
+        const memDiv = document.getElementById('memory-dump-content');
+        memDiv.innerHTML = '';
 
-        // Exemplo: Mostrar as primeiras N linhas (que correspondem aos trechos ou dutos)
-        // A matriz de retorno 'cond_inic_in' tem (n_trechos + n_dutos) linhas e 17 colunas.
-        // Colunas típicas: 0=P, 1=T, 2=Vazão, 3=Rho... (Precisa bater com seu C++)
-        
-        matrizResultados.forEach((row, idx) => {
-            if (idx >= 20) return; // Limita exibição
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${idx}</td>
-                <td>${idx < inputData.geometria_in.length ? 'Trecho' : 'Fronteira'}</td>
-                <td class="val-cell">${row[0].toFixed(2)}</td>
-                <td class="val-cell">${row[1].toFixed(2)}</td>
-                <td class="val-cell">${row[2].toFixed(4)}</td>
-                <td class="val-cell">${row[3].toFixed(4)}</td>
-            `;
-            tbody.appendChild(tr);
+        const section = (title, content) => `<div class="mem-section"><div class="mem-header">${title}</div>${content}</div>`;
+        const scalar = (lbl, val) => `<div class="mem-row"><span class="mem-label">${lbl}</span><span class="mem-val">${val}</span></div>`;
+        const array = (lbl, arr) => {
+            const limit = 20;
+            const slice = arr.slice(0, limit);
+            const more = arr.length > limit ? `... (+${arr.length - limit})` : '';
+            return `<div class="mem-row" style="display:block; margin-top:5px;"><span class="mem-label">${lbl}</span><span class="mem-array">[ ${slice.join(', ')} ${more} ]</span></div>`;
+        };
+
+        const n_dutos = data.dutos_in.length;
+        const n_trechos = data.geometria_in.length;
+        const n_nos = data.nos_in.length;
+        const n_equip = data.equip_in.length;
+
+        let html = section("1. Dimensões", scalar("n_dutos", n_dutos) + scalar("n_trechos", n_trechos) + scalar("n_nos", n_nos) + scalar("n_equip", n_equip));
+
+        const flatDutos = flattenColMajor(n_dutos, 3, data.dutos_in);
+        html += section("2. Dutos (int*)", array(`[Qtd... Origem... Destino...]`, flatDutos));
+
+        const flatGeom = flattenColMajor(n_trechos, 7, data.geometria_in);
+        html += section("3. Geometria (double*)", array(`[L... dy... D...]`, flatGeom));
+
+        const flatNos = flattenColMajor(n_nos, 2, data.nos_in);
+        html += section("4. Nós (double*)", array(`[Val (P/Q/Vol)... Temp...]`, flatNos) + array(`int* tipos (ASCII)`, data.tipos_nos_in));
+
+        if (n_equip > 0) {
+            const flatEquip = flattenColMajor(n_equip, 2, data.equip_in);
+            html += section("5. Equipamentos", array(`int* equip [Duto... Tramo...]`, flatEquip) + array(`int* tipos`, data.tipos_equip_in) + array(`double* val`, data.val_equip));
+        }
+
+        const flatCI = flattenColMajor(n_trechos + n_dutos, 17, data.cond_inic_in);
+        html += section("6. Outros", array(`double* numerico`, data.numerico) + array(`double* cond_inic`, flatCI));
+
+        memDiv.innerHTML = html;
+
+        // Renderiza as tabelas Excel
+        createTable('tab-geom', ['L', 'dy', 'D', 'Rug', 'U', 'Aco', 'Tamb'], data.geometria_in);
+        createTable('tab-nos', ['Val (P/Q/Vol)', 'T (K)'], data.nos_in);
+        // Usa a VIEW para a tabela humana
+        createTable('tab-dutos', ['Nome', 'Qtd', 'De (Nome)', 'Para (Nome)', 'De (Idx)', 'Para (Idx)'], data.dutos_view);
+        createTable('tab-ci', ['P', 'T', 'Q', '...'], data.cond_inic_in);
+    }
+
+    function createTable(id, h, r) {
+        let html = '<table class="excel-table"><thead><tr><th>#</th>' + h.map(x=>`<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+        r.forEach((row,i) => {
+            html += `<tr><td class="idx">${i}</td>` + row.map(v => `<td class="num">${typeof v==='number'? (Math.abs(v)>1e4||Math.abs(v)<0.01?v.toExponential(2):v.toFixed(4)) : v}</td>`).join('') + '</tr>';
         });
+        document.getElementById(id).innerHTML = html + '</tbody></table>';
+    }
+
+    window.openTab = function(id) {
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).style.display = 'block';
+        event.target.classList.add('active');
+    }
+
+    window.rodarWASM = async function() {
+        if (!GLOBAL_BUILT_DATA) return;
+        const btn = document.getElementById('btn-simular');
+        btn.disabled = true;
+        try {
+            log("Chamando wrapper...");
+            const res = await window.runFluxoLib(GLOBAL_BUILT_DATA, 'Fluxo_TS_WASM');
+            log(`Retorno: ${res.ret}`);
+            if(res.ret === 0) renderResults(res.cond_inic_in);
+            else alert("Erro Solver: " + res.ret);
+        } catch(e) { log("Erro: " + e.message); }
+        finally { btn.disabled = false; }
+    }
+
+    function renderResults(m) {
+        document.getElementById('results-area').style.display = 'block';
+        createTable('res-table-container', ['P (bar)', 'T (C)', 'Q', 'Rho'], m.map(r=>[r[0]/1e5, r[1]-273.15, r[2], r[3]]));
     }
 </script>
 {% endblock %}
