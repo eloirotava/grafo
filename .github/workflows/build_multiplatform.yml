@@ -1,0 +1,86 @@
+name: Build Multi-Plataforma (Win/Linux/ARM)
+
+on:
+  workflow_dispatch: # Botão manual
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: grafo_termux # IMPORTANTE: Confirme se este é o nome no seu Cargo.toml [[bin]]
+
+jobs:
+  build:
+    name: Build ${{ matrix.job_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # --- Windows (Mantido igual, estático) ---
+          - job_name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use_cross: false
+            extension: .exe
+          
+          # --- Linux PC (Servidores padrão) ---
+          - job_name: Linux AMD64 (Musl)
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: true
+            extension: ""
+
+          # --- Samsung A71 / Raspberry Pi 4, 5 (O seu caso!) ---
+          - job_name: Linux ARM64 (Musl)
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            use_cross: true
+            extension: ""
+
+          # --- Raspberry Pi Zero / 2 / Celulares muito velhos ---
+          - job_name: Linux ARMv7 (Musl)
+            os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            use_cross: true
+            extension: ""
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Para Linux/ARM, usamos o 'cross' que usa Docker para compilar sem erros de C
+      - name: Instalar Cross (Apenas Linux)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      # --- Compilação Windows ---
+      - name: Compilar Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          $env:RUSTFLAGS="-C target-feature=+crt-static"
+          cargo build --release --target ${{ matrix.target }}
+
+      # --- Compilação Linux (Cross) ---
+      - name: Compilar Linux/ARM (Musl Static)
+        if: matrix.use_cross
+        run: |
+          # O cross cuida de todo o ambiente musl/gcc automaticamente
+          cross build --release --target ${{ matrix.target }}
+
+      # --- Preparar Upload ---
+      - name: Renomear e Mover
+        shell: bash
+        run: |
+          mkdir -p dist
+          # Copia e renomeia para ficar fácil de identificar (ex: rotavaflow-aarch64)
+          cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}${{ matrix.extension }} dist/rotavaflow-${{ matrix.target }}${{ matrix.extension }}
+
+      - name: Upload do Executável
+        uses: actions/upload-artifact@v4
+        with:
+          name: binario-${{ matrix.target }}
+          path: dist/*
