@@ -1,87 +1,209 @@
 {% extends "layout.html" %}
 {% block content %}
 <style>
-    .page-content { padding: 30px; width: 100%; max-width: 1000px; margin: 0 auto; }
+    .page-content { padding: 30px; width: 100%; max-width: 1200px; margin: 0 auto; }
+    h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 20px; }
     
-    .card { background: white; border: 1px solid #ddd; border-left: 4px solid #0078d7; border-radius: 4px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .card.valve { border-left-color: #e67e22; } /* Laranja para válvulas */
+    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; font-size: 13px; }
+    .data-table th, .data-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .data-table th { background-color: #f8f9fa; font-weight: 600; color: #444; border-bottom: 2px solid #ddd; }
     
-    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
-    .tag { font-weight: bold; font-size: 16px; color: #333; }
-    .type-label { background: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase; color: #666; font-weight: bold; }
+    .input-cell { width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+    .input-cell:disabled { background-color: #f5f5f5; color: #aaa; cursor: not-allowed; }
     
-    .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
-    .field label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
-    .field input { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; color: #333; }
-    .location-info { grid-column: 1 / -1; background: #fafafa; padding: 8px; font-size: 12px; color: #555; border-radius: 3px; margin-bottom: 10px; }
+    .row-P { border-left: 4px solid #27ae60; }
+    .row-Q { border-left: 4px solid #e67e22; }
+    .row-A { border-left: 4px solid #9b59b6; }
+    .row-F { border-left: 4px solid #c0392b; }
+
+    .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #555; border: 1px solid #ccc; }
 </style>
 
 <div class="page-content">
-    <h2>Equipamentos & Válvulas</h2>
-    <p style="margin-bottom:20px; color:#666">Configuração de acessórios e máquinas.</p>
-    <div id="cards-container"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Equipamentos e Válvulas</h2>
+        <span id="save-status" style="color:green; font-weight:bold; opacity:0; transition: opacity 0.5s;">Salvo!</span>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 15%;">Tag</th>
+                <th style="width: 15%;">Tipo</th>
+                <th style="width: 15%;">Valor (Set)</th>
+                <th style="width: 20%;">Duto (Instalação)</th>
+                <th style="width: 15%;">Pos (%) <small style="color:#999; font-weight:normal">(Visual)</small></th>
+                <th style="width: 20%;">Tramo (seg_index)</th>
+            </tr>
+        </thead>
+        <tbody id="equips-body"></tbody>
+    </table>
 </div>
 
 <script>
-    function loadAndJoin() {
+    let globalData = {};
+    let valvesList = [];
+
+    function init() {
         const raw = localStorage.getItem('malha_db_v2');
-        if (!raw) return { items: [] };
-        const data = JSON.parse(raw);
+        if (!raw) return;
+        globalData = JSON.parse(raw);
 
-        // Mapa de Válvulas (Propriedades)
-        const valvePropsMap = new Map();
-        if(data.valves) data.valves.forEach(v => valvePropsMap.set(v.id, v));
-
-        // Mapa de Dutos (Para pegar nomes)
         const ductMap = new Map();
-        if(data.ducts) data.ducts.forEach(d => ductMap.set(d.id, d));
+        if(globalData.ducts) globalData.ducts.forEach(d => ductMap.set(d.id, d));
 
-        // Filtra nós que são válvulas
-        const valves = (data.nodes || []).filter(n => n.type === 'valve').map(n => {
-            // Tenta pegar propriedades da tabela 'valves' ou do próprio nó
-            const tableProps = valvePropsMap.get(n.id) || {};
+        // Mapa de Geometria para cálculo de fallback do Tramo
+        const geomMap = new Map();
+        if(globalData.duct_geom) {
+            globalData.duct_geom.forEach(g => {
+                if(!geomMap.has(g.duct_id)) geomMap.set(g.duct_id, []);
+                geomMap.get(g.duct_id).push(g);
+            });
+        }
+
+        let sourceValves = globalData.valves || [];
+        
+        // Fallback: Se tabela valves vazia, tenta pegar dos nós
+        if (sourceValves.length === 0 && globalData.nodes) {
+            sourceValves = globalData.nodes.filter(n => n.type === 'valve').map(n => ({
+                id: n.id,
+                name: n.name,
+                type: n.originalType || 'A',
+                duct_id: n.attachedTo || n.attachedDuctId,
+                t: n.ratio || 0.5,
+                value: (n.props && n.props.value) || 0,
+                seg_index: (n.props && n.props.seg_index) // Tenta pegar se existir
+            }));
+        }
+
+        valvesList = sourceValves.map(v => {
+            // Propriedades essenciais
+            const props = v.props || {};
+            const value = v.value !== undefined ? v.value : (props.value !== undefined ? props.value : 0);
             
-            // Link com Duto
-            const ductId = n.attachedTo || n.attachedDuctId || tableProps.duct_id;
-            const ductName = ductMap.has(ductId) ? ductMap.get(ductId).name : ductId;
+            // Lógica do Tramo (seg_index)
+            // 1. Usa o que veio do banco/JSON
+            // 2. Se não tiver, calcula baseado no 't' e geometria
+            let currentSeg = v.seg_index;
+            if (currentSeg === undefined || currentSeg === null) {
+                // Cálculo automático
+                const geom = geomMap.get(v.duct_id) || [];
+                if (geom.length > 0) {
+                    geom.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
+                    const totalL = geom.reduce((acc, g) => acc + (parseFloat(g.length)||0), 0);
+                    const targetL = (v.t || 0.5) * totalL;
+                    let currentL = 0;
+                    for(let g of geom) {
+                        currentL += (parseFloat(g.length)||0);
+                        if (currentL >= targetL) {
+                            currentSeg = g.seg_index;
+                            break;
+                        }
+                    }
+                    if (currentSeg === undefined) currentSeg = geom[geom.length-1].seg_index;
+                } else {
+                    currentSeg = 0; // Default se não tiver geometria
+                }
+            }
 
             return {
-                ...n,
-                props: { ...tableProps, ...n.props }, // Merge de props
-                ductName: ductName,
-                ratio: n.ratio !== undefined ? n.ratio : (tableProps.t !== undefined ? tableProps.t : 0.5)
+                ...v,
+                value,
+                seg_index: currentSeg,
+                ductName: ductMap.has(v.duct_id) ? ductMap.get(v.duct_id).name : (v.duct_id || '?')
             };
         });
 
-        return { items: valves };
+        render();
     }
 
-    const { items } = loadAndJoin();
-    const container = document.getElementById('cards-container');
-    
-    items.forEach(eq => {
-        const card = document.createElement('div');
-        card.className = 'card valve'; // Estilo laranja
-        
-        const typeName = `Válvula (${eq.originalType || 'A'})`;
-        const posPerc = Math.round((eq.ratio || 0.5) * 100);
-        const p = eq.props || {};
+    function render() {
+        const tbody = document.getElementById('equips-body');
+        tbody.innerHTML = '';
 
-        card.innerHTML = `
-            <div class="card-header">
-                <span class="tag">${eq.name}</span>
-                <span class="type-label">${typeName}</span>
-            </div>
-            <div class="location-info">📍 Instalada no duto <strong>${eq.ductName || '?'}</strong> a ${posPerc}% do início.</div>
-            <div class="grid-form">
-                <div class="field"><label>Abertura (%)</label><input type="number" value="${p.opening !== undefined ? p.opening : 100}"></div>
-                <div class="field"><label>CV (Coef. Vazão)</label><input type="number" value="${p.cv !== undefined ? p.cv : 50}"></div>
-                <div class="field"><label>Estado</label><input type="text" value="${p.status || 'Aberta'}" readonly></div>
-            </div>
-        `;
-        container.appendChild(card);
-    });
+        if (valvesList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#999;">Nenhuma válvula encontrada.</td></tr>';
+            return;
+        }
 
-    if (items.length === 0) container.innerHTML = '<p style="color:#777; text-align:center; padding: 40px;">Nenhuma válvula encontrada.</p>';
+        valvesList.forEach(v => {
+            const tr = document.createElement('tr');
+            tr.className = `row-${v.type}`; 
+
+            const isSetPoint = (v.type === 'P' || v.type === 'Q');
+
+            tr.innerHTML = `
+                <td><strong>${v.name}</strong></td>
+                <td>
+                    <select class="input-cell" onchange="updateValve('${v.id}', 'type', this.value)">
+                        <option value="A" ${v.type==='A'?'selected':''}>A (Acessório)</option>
+                        <option value="F" ${v.type==='F'?'selected':''}>F (Fechada)</option>
+                        <option value="P" ${v.type==='P'?'selected':''}>P (Pressão)</option>
+                        <option value="Q" ${v.type==='Q'?'selected':''}>Q (Vazão)</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="input-cell" value="${v.value}" step="0.1" 
+                    ${!isSetPoint ? 'disabled' : ''} onchange="updateValve('${v.id}', 'value', this.value)">
+                </td>
+                <td><span class="badge">${v.ductName}</span></td>
+                <td style="color:#666;">${Math.round((v.t||0)*100)}%</td>
+                <td>
+                    <input type="number" class="input-cell" value="${v.seg_index}" step="1" 
+                    onchange="updateValve('${v.id}', 'seg_index', this.value)">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.updateValve = function(id, field, value) {
+        const v = valvesList.find(x => x.id === id);
+        if (v) {
+            if (field === 'value' || field === 'seg_index' || field === 't') {
+                v[field] = parseFloat(value);
+            } else {
+                v[field] = value;
+            }
+            save();
+            if (field === 'type') render();
+        }
+    };
+
+    function save() {
+        // Atualiza tabela valves
+        globalData.valves = valvesList.map(v => ({
+            id: v.id,
+            name: v.name,
+            type: v.type,
+            value: v.value,
+            duct_id: v.duct_id,
+            t: v.t,
+            seg_index: v.seg_index, // Salva o tramo
+            props: { value: v.value, seg_index: v.seg_index } // Backup em props
+        }));
+
+        // Atualiza nodes (Canvas)
+        if (globalData.nodes) {
+            globalData.nodes.forEach(n => {
+                if (n.type === 'valve') {
+                    const updated = valvesList.find(v => v.id === n.id);
+                    if (updated) {
+                        n.originalType = updated.type;
+                        if (!n.props) n.props = {};
+                        n.props.value = updated.value;
+                        n.props.seg_index = updated.seg_index; // Passa o tramo pro Canvas guardar
+                    }
+                }
+            });
+        }
+
+        localStorage.setItem('malha_db_v2', JSON.stringify(globalData));
+        const status = document.getElementById('save-status');
+        status.style.opacity = 1;
+        setTimeout(() => status.style.opacity = 0, 1500);
+    }
+
+    init();
 </script>
 {% endblock %}

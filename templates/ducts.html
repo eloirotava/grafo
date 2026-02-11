@@ -1,106 +1,256 @@
 {% extends "layout.html" %}
 {% block content %}
 <style>
-    .page-content { padding: 30px; width: 100%; max-width: 1200px; margin: 0 auto; }
-    h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 20px; }
+    .page-content { padding: 20px; width: 100%; max-width: 1600px; margin: 0 auto; height: calc(100vh - 80px); display: flex; flex-direction: column; }
+    h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 10px; }
+
+    /* Layout Mestre-Detalhe */
+    .master-detail-container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
     
-    .data-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px; font-size: 13px; }
-    .data-table th, .data-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-    .data-table th { background-color: #f8f9fa; font-weight: 600; color: #444; border-bottom: 2px solid #ddd; }
+    /* Painel Esquerdo (Lista de Dutos) */
+    .panel-left { width: 350px; display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
+    .panel-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
     
-    .badge-geom { background: #eee; padding: 2px 6px; border-radius: 10px; font-size: 11px; border: 1px solid #ccc; }
-    .text-center { text-align: center; }
-    .mono { font-family: monospace; color: #555; }
+    .duct-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+    .duct-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
+    .duct-item:hover { background: #f0f8ff; }
+    .duct-item.active { background: #e3f2fd; border-left: 4px solid #0078d7; }
+    .duct-id { font-weight: bold; color: #333; }
+    .duct-sub { font-size: 11px; color: #666; margin-top: 2px; }
+
+    /* Painel Direito (Tramos) */
+    .panel-right { flex: 1; display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 4px; background: #fff; padding: 0; overflow: hidden; }
+    .empty-state { padding: 40px; text-align: center; color: #999; margin-top: 50px; }
+
+    /* Tabela de Tramos */
+    .table-container { flex: 1; overflow: auto; padding: 10px; }
+    .geom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .geom-table th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; text-align: left; padding: 8px; border-bottom: 2px solid #ddd; }
+    .geom-table td { border-bottom: 1px solid #eee; padding: 4px; }
+    
+    input.cell-input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; }
+    input.cell-input:focus { border-color: #0078d7; outline: none; }
+    
+    .btn-sm { padding: 2px 6px; font-size: 11px; cursor: pointer; }
+    .btn-add { background: #27ae60; color: white; border: none; border-radius: 3px; padding: 5px 10px; font-weight: bold; cursor: pointer; }
+    .btn-del { background: #e74c3c; color: white; border: none; border-radius: 3px; }
+
+    #save-status { color: green; font-weight: bold; opacity: 0; transition: opacity 0.5s; margin-left: 10px; }
 </style>
 
 <div class="page-content">
-    <h2>Dutos (Tubulação e Geometria)</h2>
-    
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th style="width: 10%;">Tag</th>
-                <th style="width: 20%;">Conexão (De &rarr; Para)</th>
-                <th class="text-center" style="width: 12%;">Comp. Total (m)</th>
-                <th class="text-center" style="width: 12%;">Diâmetro Ref. (pol)</th>
-                <th class="text-center" style="width: 12%;">Δ Elevação (m)</th>
-                <th class="text-center" style="width: 10%;">Segmentos</th>
-            </tr>
-        </thead>
-        <tbody id="ducts-body"></tbody>
-    </table>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Configuração de Dutos e Tramos</h2>
+        <div>
+            <span id="save-status">Salvo!</span>
+        </div>
+    </div>
+
+    <div class="master-detail-container">
+        <div class="panel-left">
+            <div class="panel-header">
+                Lista de Dutos
+            </div>
+            <ul class="duct-list" id="duct-list-container"></ul>
+        </div>
+
+        <div class="panel-right">
+            <div class="panel-header">
+                <span id="selected-duct-title">Selecione um duto</span>
+                <button class="btn-add" onclick="addSegment()" id="btn-add-seg" style="display:none;">+ Adicionar Tramo</button>
+            </div>
+            
+            <div id="geom-container" class="table-container">
+                <div class="empty-state">Clique em um duto à esquerda para editar seus tramos.</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
-    function loadDucts() {
+    let globalData = {};
+    let currentDuctId = null;
+    let nodeMap = new Map();
+
+    function init() {
         const raw = localStorage.getItem('malha_db_v2');
-        if (!raw) return { ducts: [], nodes: [], geom: [] };
-        const data = JSON.parse(raw);
-        
-        // Mapa de Nós para pegar nomes
-        const nodeMap = new Map();
-        if(data.nodes) data.nodes.forEach(n => nodeMap.set(n.id, n.name));
+        if (!raw) return;
+        globalData = JSON.parse(raw);
 
-        // Agrupar geometria por duct_id
-        const geomMap = new Map();
-        if(data.duct_geom) {
-            data.duct_geom.forEach(g => {
-                if(!geomMap.has(g.duct_id)) geomMap.set(g.duct_id, []);
-                geomMap.get(g.duct_id).push(g);
-            });
-        }
+        // Mapear Nomes de Nós
+        if(globalData.nodes) globalData.nodes.forEach(n => nodeMap.set(n.id, n.name));
 
-        return { 
-            ducts: data.ducts || [], 
-            nodeMap, 
-            geomMap 
-        };
+        // Inicializa arrays se não existirem
+        if(!globalData.ducts) globalData.ducts = [];
+        if(!globalData.duct_geom) globalData.duct_geom = [];
+
+        renderDuctList();
     }
 
-    const { ducts, nodeMap, geomMap } = loadDucts();
-    const tbody = document.getElementById('ducts-body');
+    function renderDuctList() {
+        const list = document.getElementById('duct-list-container');
+        list.innerHTML = '';
 
-    if(ducts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#999;">Nenhum duto encontrado.</td></tr>';
-    } else {
-        ducts.forEach(d => {
-            const tr = document.createElement('tr');
+        globalData.ducts.forEach(d => {
+            const li = document.createElement('li');
+            li.className = `duct-item ${currentDuctId === d.id ? 'active' : ''}`;
+            li.onclick = () => selectDuct(d.id);
             
-            // Resolve nomes
-            const fromName = nodeMap.get(d.start_id) || d.start_id || '?';
-            const toName = nodeMap.get(d.end_id) || d.end_id || '?';
+            const from = nodeMap.get(d.start_id) || d.start_id || '?';
+            const to = nodeMap.get(d.end_id) || d.end_id || '?';
 
-            // Calcula geometria
-            const segs = d.geometry || geomMap.get(d.id) || [];
-            let totalL = 0;
-            let totalDy = 0;
-            let refD = 0;
-
-            if(segs.length > 0) {
-                // Ordena por índice do segmento
-                segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
-                
-                segs.forEach(s => {
-                    totalL += (parseFloat(s.length) || parseFloat(s.L) || 0);
-                    totalDy += (parseFloat(s.dy) || 0); // dy é a elevação
-                });
-                // Pega diâmetro do primeiro segmento
-                refD = parseFloat(segs[0].diameter || segs[0].D || 0);
-            } else {
-                // Fallback para propriedades diretas (legado)
-                totalL = d.length || 0;
-            }
-
-            tr.innerHTML = `
-                <td><strong>${d.name}</strong></td>
-                <td><span class="mono">${fromName}</span> &rarr; <span class="mono">${toName}</span></td>
-                <td class="text-center"><strong>${totalL.toFixed(1)}</strong></td>
-                <td class="text-center">${refD > 0 ? refD.toFixed(2) + '"' : '-'}</td>
-                <td class="text-center">${totalDy.toFixed(1)}</td>
-                <td class="text-center"><span class="badge-geom">${segs.length} trechos</span></td>
+            li.innerHTML = `
+                <div class="duct-id">${d.name} (${d.id})</div>
+                <div class="duct-sub">${from} &rarr; ${to}</div>
             `;
-            tbody.appendChild(tr);
+            list.appendChild(li);
         });
     }
+
+    function selectDuct(id) {
+        currentDuctId = id;
+        renderDuctList(); // Atualiza highlight
+        
+        const d = globalData.ducts.find(x => x.id === id);
+        document.getElementById('selected-duct-title').innerText = `Tramos de: ${d.name}`;
+        document.getElementById('btn-add-seg').style.display = 'block';
+
+        renderGeomTable();
+    }
+
+    function renderGeomTable() {
+        const container = document.getElementById('geom-container');
+        
+        // Filtra geometria do duto selecionado
+        const segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+        segments.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
+
+        if(segments.length === 0) {
+            // Se não tiver geometria, cria uma default
+            addSegment(true); // true = silent add
+            return;
+        }
+
+        let html = `
+            <table class="geom-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px">#</th>
+                        <th title="Comprimento (m)">L (m)</th>
+                        <th title="Delta Elevação (m)">dy (m)</th>
+                        <th title="Diâmetro (m)">D (m)</th>
+                        <th title="Rugosidade (m)">Rug (m)</th>
+                        <th title="Coef. Troca Térmica">U</th>
+                        <th title="Temp. Ambiente (K)">Tamb (K)</th>
+                        <th title="Material/Aço">Aço</th>
+                        <th style="width:30px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        segments.forEach((g, idx) => {
+            // Normaliza propriedades (caso venham do formato antigo length/diameter)
+            const L = g.L !== undefined ? g.L : (g.length || 0);
+            const D = g.D !== undefined ? g.D : (g.diameter || 0);
+            const rug = g.rug !== undefined ? g.rug : (g.roughness || 0);
+            const dy = g.dy || 0;
+            const U = g.U || 0;
+            const Tamb = g.Tamb || 298;
+            const aco = g.aco || "0";
+
+            // Atualiza o objeto global para manter consistência
+            g.L = L; g.D = D; g.rug = rug; g.dy = dy; g.U = U; g.Tamb = Tamb; g.aco = aco;
+
+            html += `
+                <tr>
+                    <td style="text-align:center;">${idx}</td>
+                    <td><input type="number" class="cell-input" value="${L}" step="0.1" onchange="updateGeom(${idx}, 'L', this.value)"></td>
+                    <td><input type="number" class="cell-input" value="${dy}" step="0.1" onchange="updateGeom(${idx}, 'dy', this.value)"></td>
+                    <td><input type="number" class="cell-input" value="${D}" step="0.0001" onchange="updateGeom(${idx}, 'D', this.value)"></td>
+                    <td><input type="number" class="cell-input" value="${rug}" step="0.00001" onchange="updateGeom(${idx}, 'rug', this.value)"></td>
+                    <td><input type="number" class="cell-input" value="${U}" step="0.1" onchange="updateGeom(${idx}, 'U', this.value)"></td>
+                    <td><input type="number" class="cell-input" value="${Tamb}" step="0.1" onchange="updateGeom(${idx}, 'Tamb', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${aco}" onchange="updateGeom(${idx}, 'aco', this.value)"></td>
+                    <td><button class="btn-del btn-sm" onclick="delSegment(${idx})">X</button></td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    // --- Ações ---
+
+    window.addSegment = function(silent = false) {
+        if(!currentDuctId) return;
+        
+        // Pega o último segmento para copiar valores
+        const existing = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+        const last = existing.length > 0 ? existing[existing.length-1] : null;
+
+        const newSeg = {
+            duct_id: currentDuctId,
+            seg_index: existing.length,
+            L: last ? last.L : 100,
+            dy: 0,
+            D: last ? last.D : 0.1,
+            rug: last ? last.rug : 0.000045,
+            U: last ? last.U : 0,
+            aco: last ? last.aco : "0",
+            Tamb: last ? last.Tamb : 298
+        };
+
+        globalData.duct_geom.push(newSeg);
+        save();
+        if(!silent) renderGeomTable();
+        else renderGeomTable(); // Renderiza igual
+    };
+
+    window.delSegment = function(idxDisplay) {
+        if(!currentDuctId) return;
+        
+        // Encontra os segmentos deste duto
+        let segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+        segments.sort((a,b) => a.seg_index - b.seg_index);
+        
+        // Identifica qual remover
+        const toRemove = segments[idxDisplay];
+        if(!toRemove) return;
+
+        // Remove do array global
+        const globalIdx = globalData.duct_geom.indexOf(toRemove);
+        if(globalIdx > -1) globalData.duct_geom.splice(globalIdx, 1);
+
+        // Re-indexa os que sobraram deste duto
+        const remaining = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+        remaining.sort((a,b) => a.seg_index - b.seg_index);
+        remaining.forEach((g, i) => g.seg_index = i);
+
+        save();
+        renderGeomTable();
+    };
+
+    window.updateGeom = function(idxDisplay, field, value) {
+        let segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+        segments.sort((a,b) => a.seg_index - b.seg_index);
+        
+        const seg = segments[idxDisplay];
+        if(seg) {
+            if(field === 'aco') seg[field] = value;
+            else seg[field] = parseFloat(value);
+            save();
+        }
+    };
+
+    function save() {
+        localStorage.setItem('malha_db_v2', JSON.stringify(globalData));
+        const status = document.getElementById('save-status');
+        status.style.opacity = 1;
+        setTimeout(() => status.style.opacity = 0, 1500);
+    }
+
+    init();
 </script>
 {% endblock %}

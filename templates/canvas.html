@@ -214,7 +214,7 @@
             objs.push(new fabric.Line([0,-8, 0,8], {stroke:'#d35400', strokeWidth:1, originX:'center', originY:'center'})); 
             objs.push(new fabric.Text(name, {fontSize:11, fill:'#333', top: 24, originX:'center', originY:'center', fontWeight:'600', fontFamily:'Segoe UI'}));
         } else {
-            // Todos os nós (P, Q, I) viram bolinha azul
+            // Visual de Nó (Bolinha Azul)
             objs.push(new fabric.Circle({radius:8, fill:'#3498db', stroke:'#2980b9', strokeWidth:2, originX:'center', originY:'center'}));
             addPort(0,0,0);
             objs.push(new fabric.Text(name, {fontSize:12, fill:'#333', top:15, originX:'center', originY:'center', fontWeight:'600'}));
@@ -358,7 +358,7 @@
         organizeLayers();
     }
 
-    // --- SALVAMENTO (Fix: Agora salva Volume e Flow) ---
+    // --- SALVAMENTO (.rfm e campos novos) ---
     function getModel() {
         const nodes = [];
         const valves = [];
@@ -369,7 +369,6 @@
 
         canvas.getObjects('group').forEach(o => {
             const d = o.data;
-            
             if (d.type === 'valve') {
                 valves.push({
                     id: d.id,
@@ -377,9 +376,9 @@
                     type: d.originalType || 'A',
                     duct_id: d.attachedDuctId,
                     t: d.ratio || 0.5,
-                    cv: (d.props && d.props.cv) || 50,
-                    opening: (d.props && d.props.opening) || 100,
-                    status: (d.props && d.props.status) || 'open'
+                    // Garante que value e seg_index sejam salvos
+                    value: (d.props && d.props.value) || 0,
+                    seg_index: (d.props && d.props.seg_index) !== undefined ? d.props.seg_index : 0
                 });
             } else {
                 nodes.push({
@@ -396,9 +395,9 @@
                         node_id: d.id,
                         pressure: d.physics.pressure,
                         temperature: d.physics.temperature,
-                        flow: d.physics.flow, // [FIX] Adicionado
-                        volume: d.physics.volume, // [FIX] Adicionado
-                        elevation: d.physics.elevation // Mantido por compatibilidade
+                        flow: d.physics.flow,
+                        volume: d.physics.volume,
+                        elevation: d.physics.elevation
                     });
                 }
                 
@@ -430,10 +429,13 @@
                     duct_geom.push({
                         duct_id: d.id,
                         seg_index: g.seg_index,
-                        length: g.length,
-                        diameter: g.diameter,
-                        roughness: g.roughness,
-                        dy: g.dy // [FIX] Importante salvar a elevação do trecho
+                        L: g.L !== undefined ? g.L : g.length,
+                        dy: g.dy || 0,
+                        D: g.D !== undefined ? g.D : g.diameter,
+                        rug: g.rug !== undefined ? g.rug : g.roughness,
+                        U: g.U || 0,
+                        aco: g.aco || "0",
+                        Tamb: g.Tamb || 298
                     });
                 });
             }
@@ -442,40 +444,89 @@
         return { nodes, ducts, valves, duct_geom, node_props, node_composition, version: "2.1", timestamp: Date.now() };
     }
 
+// --- EXPORTAR (Software Sério: Pergunta o nome, compacta em Gzip e salva como .rfm) ---
+// --- EXPORTAR (Compacta em Gzip e salva como .rfm) ---
     async function exportJSON() {
         const data = getModel();
-        const jsonStr = JSON.stringify(data);
-        const blob = new Blob([jsonStr], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'malha_corrigida.json';
-        a.click();
+        const jsonStr = JSON.stringify(data, null, 2);
+        
+        const defaultName = `projeto_malha.rfm`;
+
+        try {
+            // 1. Abre a janela "Salvar Como" para o usuário escolher o nome e local
+            if (window.showSaveFilePicker) {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: defaultName,
+                    types: [{
+                        description: 'Arquivo de Malha RotavaFlow (.rfm)',
+                        accept: { 'application/octet-stream': ['.rfm'] },
+                    }],
+                });
+
+                // 2. Transforma o JSON em Stream e aplica compressão Gzip
+                const stream = new Blob([jsonStr], { type: 'application/json' }).stream();
+                const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+                
+                const writable = await handle.createWritable();
+                await compressedStream.pipeTo(writable);
+                
+                setStatus("Projeto exportado com sucesso (.rfm compactado)!");
+            } else {
+                // Fallback para navegadores que não suportam showSaveFilePicker
+                const stream = new Blob([jsonStr], { type: 'application/json' }).stream();
+                const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+                const blob = await new Response(compressedStream).blob();
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = defaultName;
+                a.click();
+                setStatus("Download iniciado (.rfm compactado).");
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error("Erro ao exportar:", err);
+                alert("Erro ao salvar arquivo.");
+            }
+        }
     }
 
+    // --- IMPORTAR (Inteligente: Descompacta .rfm ou lê .json direto) ---
     async function importJSON(e) {
         const file = e.target.files[0];
         if(!file) return;
+
         try {
             let jsonStr;
-            if (file.name.endsWith('.gz')) {
-                setStatus("Descomprimindo...");
+            // Verifica a extensão para decidir se precisa descompactar
+            if (file.name.toLowerCase().endsWith('.rfm')) {
+                setStatus("Lendo e descompactando arquivo .rfm...");
+                
+                // Usa DecompressionStream para descompactar o Gzip
                 const ds = new DecompressionStream('gzip');
                 const stream = file.stream().pipeThrough(ds);
                 const blob = await new Response(stream).blob();
                 jsonStr = await blob.text();
             } else {
+                // Se for .json ou outro, tenta ler como texto puro
+                setStatus("Lendo arquivo JSON...");
                 jsonStr = await file.text();
             }
+
             const data = JSON.parse(jsonStr);
             const mergedData = adaptToNative(data);
             reconstruct(mergedData);
             saveState();
             setStatus("Projeto carregado com sucesso!");
+
         } catch(err) {
-            console.error(err);
-            setStatus("Erro ao ler arquivo.");
+            console.error("Erro na importação:", err);
+            setStatus("Erro ao ler arquivo. Verifique se o formato está correto.");
+            alert("Não foi possível processar o arquivo. Certifique-se de que é um .rfm válido ou um JSON de malha.");
         }
+        
+        // Limpa o input para permitir carregar o mesmo arquivo novamente se necessário
         e.target.value = ''; 
     }
 
@@ -488,11 +539,8 @@
         if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); }
     };
 
-    // --- IMPORTAÇÃO (Fix: Tratamento de IDs como String) ---
-// --- IMPORTAÇÃO ROBUSTA (Aceita value ou fraction) ---
+    // --- IMPORTAÇÃO (Mantida a robustez para IDs e Composição) ---
     function adaptToNative(data) {
-        console.log("Processando dados...", data);
-        
         const propsMap = new Map();
         if(data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
 
@@ -509,19 +557,12 @@
             .filter(n => n.type !== 'valve' && n.type !== 'A') 
             .map(n => {
                 const sid = String(n.id);
-                
-                // Recupera composição da tabela
                 let comps = compMap.get(sid) || [];
-                
-                // Se não achou na tabela, tenta do objeto (n.composition)
-                if (comps.length === 0 && n.composition) {
-                    comps = n.composition;
-                }
+                if (comps.length === 0 && n.composition) comps = n.composition;
 
-                // Normaliza para garantir que temos 'value'
                 const normalizedComps = comps.map(c => ({
                     component: c.component,
-                    value: (c.value !== undefined) ? c.value : c.fraction // [CORREÇÃO AQUI]
+                    value: (c.value !== undefined) ? c.value : c.fraction
                 })).filter(c => c.value !== undefined);
 
                 return {
