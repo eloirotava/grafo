@@ -12,41 +12,29 @@
     .form-group input, .form-group select { width: 120px; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; text-align: right; }
 
     .sim-controls { padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd; display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
-    .btn-run { background: #28a745; color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; transition: background 0.2s; }
-    .btn-run:hover { background: #218838; }
+    .btn-run { background: #28a745; color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
     .btn-run:disabled { background: #ccc; cursor: not-allowed; }
     .btn-preview { background: #6c757d; }
     
     .status-box { padding: 12px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; background: #222; color: #0f0; margin-bottom: 20px; min-height: 60px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
     
-    /* ÁREA DE INSPEÇÃO */
+    /* PREVIEW TABLES */
     .preview-area { margin-bottom: 30px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
     .preview-tabs { display: flex; background: #f1f1f1; border-bottom: 1px solid #ccc; overflow-x: auto; }
-    .tab-btn { padding: 8px 15px; cursor: pointer; border: none; background: none; font-size: 12px; font-weight: bold; color: #555; border-right: 1px solid #ddd; white-space: nowrap; }
-    .tab-btn:hover { background: #e9e9e9; }
+    .tab-btn { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 12px; font-weight: bold; color: #555; border-right: 1px solid #ddd; white-space: nowrap; }
     .tab-btn.active { background: #fff; color: #0078d7; border-bottom: 3px solid #0078d7; margin-bottom: -1px; }
     
     .tab-content { display: none; padding: 0; overflow: auto; max-height: 500px; }
     .tab-content.active { display: block; }
 
-    /* MEMORY DUMP */
-    .memory-dump { padding: 15px; font-family: 'Consolas', monospace; font-size: 11px; background: #1e1e1e; color: #d4d4d4; }
-    .mem-section { margin-bottom: 25px; border-left: 2px solid #555; padding-left: 10px; }
-    .mem-header { color: #fff; font-weight: bold; font-size: 13px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 2px; display:inline-block;}
-    .mem-row { display: flex; margin-bottom: 2px; }
-    .mem-label { color: #569cd6; min-width: 150px; }
-    .mem-val { color: #b5cea8; }
-    .mem-array { color: #ce9178; word-break: break-all; margin-top:3px; display:block; }
-    .mem-note { color: #6a9955; font-style: italic; margin-left: 10px; }
-
-    /* ESTILO EXCEL */
-    .excel-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', sans-serif; white-space: nowrap; }
-    .excel-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 6px; text-align: left; color: #333; position: sticky; top: 0; z-index: 10; font-weight: 600; }
-    .excel-table td { border: 1px solid #ddd; padding: 4px 6px; color: #333; }
+    .excel-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Segoe UI', sans-serif; white-space: nowrap; }
+    .excel-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 8px; text-align: left; position: sticky; top: 0; z-index: 10; font-weight: 600; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
+    .excel-table td { border: 1px solid #ddd; padding: 6px 8px; color: #333; }
     .excel-table tr:nth-child(even) { background-color: #fcfcfc; }
     .excel-table td.num { text-align: right; font-family: 'Consolas', monospace; color: #0056b3; }
-    
-    .results-area { display: none; margin-top:20px; border-top: 2px solid #0078d7; padding-top:20px; }
+    .excel-table td.idx { background: #eee; font-weight: bold; text-align: center; width: 40px; }
+
+    .results-area { display: none; margin-top:20px; border-top: 3px solid #0078d7; padding-top:20px; }
 </style>
 
 <div class="page-content">
@@ -73,34 +61,31 @@
     </div>
 
     <div class="sim-controls">
-        <button class="btn-run btn-preview" onclick="prepararDados()">1. Preparar Dados (Ver Memória)</button>
-        <button id="btn-simular" class="btn-run" onclick="rodarWASM()" disabled style="background:#0078d7; opacity: 0.5;">2. Rodar Solver ▶</button>
+        <button class="btn-run btn-preview" onclick="prepararDados()">1. Carregar & Verificar Dados</button>
+        <button id="btn-simular" class="btn-run" onclick="rodarWASM()" disabled style="opacity: 0.5;">2. Rodar Solver ▶</button>
     </div>
 
-    <div id="console-log" class="status-box">Aguardando preparação...</div>
+    <div id="console-log" class="status-box">Clique em 'Carregar & Verificar' para ver as variáveis que irão para o Wrapper.</div>
 
     <div id="preview-container" class="preview-area" style="display:none;">
         <div class="preview-tabs">
-            <button class="tab-btn active" onclick="openTab('tab-mem')">🖥️ Memória (O que entra no C++)</button>
-            <button class="tab-btn" onclick="openTab('tab-dutos')">Dutos (Conectividade)</button>
+            <button class="tab-btn active" onclick="openTab('tab-dutos')">Dutos</button>
             <button class="tab-btn" onclick="openTab('tab-geom')">Geometria</button>
-            <button class="tab-btn" onclick="openTab('tab-nos')">Nós (Valores)</button>
+            <button class="tab-btn" onclick="openTab('tab-nos')">Nós (Input)</button>
             <button class="tab-btn" onclick="openTab('tab-ci')">Condição Inicial</button>
+            <button class="tab-btn" onclick="openTab('tab-equip')">Equipamentos</button>
         </div>
         
-        <div id="tab-mem" class="tab-content active">
-            <div id="memory-dump-content" class="memory-dump"></div>
-        </div>
-
-        <div id="tab-dutos" class="tab-content"></div>
-        <div id="tab-nos" class="tab-content"></div>
+        <div id="tab-dutos" class="tab-content active"></div>
         <div id="tab-geom" class="tab-content"></div>
+        <div id="tab-nos" class="tab-content"></div>
         <div id="tab-ci" class="tab-content"></div>
+        <div id="tab-equip" class="tab-content"></div>
     </div>
 
     <div id="results-area" class="results-area">
-        <h3>Resultados Finais</h3>
-        <div id="res-table-container" style="overflow-x:auto; border:1px solid #ddd;"></div>
+        <h3>Resultados da Simulação</h3>
+        <div id="res-table-container" style="overflow-x:auto;"></div>
     </div>
 </div>
 
@@ -136,33 +121,25 @@
         ];
     }
 
-    // ACHATAMENTO (Column-Major)
-    function flattenColMajor(rows, cols, matrix) {
-        const result = [];
-        for (let j = 0; j < cols; j++) { 
-            for (let i = 0; i < rows; i++) { 
-                result.push(matrix[i][j]);
-            }
-        }
-        return result;
-    }
-
     function prepararDados() {
         try {
             const raw = localStorage.getItem('malha_db_v2');
             if (!raw) throw new Error("Malha vazia!");
             const data = JSON.parse(raw);
 
+            // 1. CARREGA PROPRIEDADES DO NODE_PROPS (Merge com o desenho)
             const propsMap = new Map();
             if (data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
 
-            const nodeMap = new Map(); // ID -> Index
-            const nodeNameMap = new Map(); // ID -> Nome Real
+            const nodeMap = new Map();
+            const nodeNameMap = new Map(); // Para exibição apenas
 
+            // Filtra nós reais (exclui válvulas visuais) e aplica propriedades
             const nodes = (data.nodes || [])
                 .filter(n => n.type !== 'valve' && n.type !== 'A')
                 .map(n => {
                     const saved = propsMap.get(String(n.id)) || {};
+                    // IMPORTANTE: physics recebe o que foi salvo no banco (valores reais)
                     return { ...n, physics: { ...(n.physics||{}), ...saved } };
                 });
 
@@ -171,14 +148,16 @@
                 nodeNameMap.set(n.id, n.name);
             });
 
+            // 2. PREPARA MATRIZES
             const geometria_in = [];
             const dutos_in = [];
-            const dutos_view = []; // Para exibição humana
+            const dutos_view = []; // Apenas para exibição com nomes
             
             data.ducts.forEach(d => {
                 const segs = data.duct_geom ? data.duct_geom.filter(g => g.duct_id === d.id) : [];
                 segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
                 
+                // Fallback se geometria vazia
                 if (segs.length === 0) segs.push({L:100, dy:0, D:0.1, rug:4.5e-5, U:0, aco:0, Tamb:298});
 
                 segs.forEach(s => {
@@ -188,142 +167,130 @@
                     ]);
                 });
                 
-                const startIdx = nodeMap.get(d.start_id);
-                const endIdx = nodeMap.get(d.end_id);
+                const sIdx = nodeMap.get(d.start_id);
+                const eIdx = nodeMap.get(d.end_id);
 
-                // Matriz para o Solver (Apenas números)
-                dutos_in.push([segs.length, startIdx, endIdx]);
+                // Matriz Real para o Wrapper [Qtd, De, Para]
+                dutos_in.push([segs.length, sIdx, eIdx]);
 
-                // Matriz para o Humano (Com nomes)
+                // Matriz para Visualização (Humana)
                 dutos_view.push([
                     d.name,
                     segs.length,
                     nodeNameMap.get(d.start_id) || d.start_id,
                     nodeNameMap.get(d.end_id) || d.end_id,
-                    startIdx,
-                    endIdx
+                    sIdx, eIdx
                 ]);
             });
 
-            // Lógica NÓS
+            // 3. NÓS (Valores e Tipos)
             const nos_in = nodes.map(n => {
                 const t = n.originalType || 'I';
-                const phys = n.physics || {};
+                const p = n.physics || {};
                 
-                let val1 = 0;
-                if (t === 'P') val1 = phys.pressure ?? 101325;
-                else if (t === 'Q') val1 = phys.flow ?? 0;
-                else if (t === 'I') val1 = phys.volume ?? 0;
+                let val = 0;
+                // Valores já estão em SI no JSON (salvos pelo nodes.html)
+                if (t === 'P') val = p.pressure ?? 101325;
+                else if (t === 'Q') val = p.flow ?? 0;
+                else if (t === 'I') val = p.volume ?? 0;
 
-                let val2 = phys.temperature ?? 298.15; 
+                let temp = p.temperature ?? 298.15;
 
-                return [val1, val2];
+                return [val, temp];
             });
 
             const tipos_nos_in = nodes.map(n => (n.originalType || 'I').charCodeAt(0));
 
+            // 4. COMPOSIÇÃO
             const compOrder = ['N2','CO2','C1','C2','C3','iC4','nC4','iC5','nC5','C6','C7','C8','C9','C10'];
             const composicao_nos_in = nodes.map(n => {
-                const vec = new Array(14).fill(0);
-                let hasComp = false;
+                const v = new Array(14).fill(0);
                 if (n.composition) n.composition.forEach(c => {
                     const idx = compOrder.indexOf(c.component.toUpperCase());
-                    if (idx >= 0) { vec[idx] = parseFloat(c.value); hasComp = true; }
+                    if (idx >= 0) v[idx] = parseFloat(c.value);
                 });
-                if (!hasComp) vec[2] = 100.0; 
-                return vec;
+                // Se não tiver composição, assume C1 puro
+                let sum = v.reduce((a,b)=>a+b, 0);
+                if (sum < 0.1) v[2] = 100.0; 
+                return v;
             });
 
-            const equip_in = [], tipos_equip_in = [], val_equip = [];
+            // 5. EQUIPAMENTOS
+            const equip_in = [], tipos_equip_in = [], val_equip = [], equip_view = [];
             const valves = (data.valves || []).concat((data.nodes||[]).filter(n => n.type === 'valve'));
             const ductIdToIndex = new Map(data.ducts.map((d, i) => [d.id, i]));
 
             valves.forEach(v => {
                 const dIdx = ductIdToIndex.get(v.duct_id || v.attachedTo);
                 if (dIdx !== undefined) {
+                    // Real
                     equip_in.push([dIdx, parseInt(v.seg_index || 0)]);
                     tipos_equip_in.push((v.type || 'A').charCodeAt(0));
                     val_equip.push(parseFloat(v.value || 0));
+                    
+                    // View
+                    const dName = data.ducts[dIdx].name;
+                    equip_view.push([v.name, v.type, v.value, dName, v.seg_index]);
                 }
             });
 
+            // 6. CONDIÇÃO INICIAL (Matriz Gigante)
             const n_trechos = geometria_in.length;
             const ci_rows = n_trechos + data.ducts.length;
+            // P=50bar, T=300K, Q=1, CO2=5, C1=95
             const defaultCI = [5000000, 300, 1, 0, 0, 5, 95, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
             const cond_inic_in = Array.from({length: ci_rows}, () => [...defaultCI]);
 
             GLOBAL_BUILT_DATA = {
                 dutos_in, dutos_view, geometria_in, nos_in, tipos_nos_in, composicao_nos_in,
-                equip_in, tipos_equip_in, val_equip,
+                equip_in, tipos_equip_in, val_equip, equip_view,
                 numerico: getNumericParams(),
                 cond_inic_in
             };
 
-            renderDebug(GLOBAL_BUILT_DATA);
+            renderPreview(GLOBAL_BUILT_DATA);
             
             const btnSim = document.getElementById('btn-simular');
             btnSim.disabled = false;
             btnSim.style.opacity = "1";
-            log("Dados preparados! Verifique a aba MEMÓRIA.");
+            log("Variáveis carregadas. Confira as tabelas abaixo.");
 
         } catch (e) {
             log("Erro: " + e.message); console.error(e);
         }
     }
 
-    // --- VISUALIZADOR DE MEMÓRIA ---
-    function renderDebug(data) {
+    function renderPreview(data) {
         document.getElementById('preview-container').style.display = 'flex';
-        const memDiv = document.getElementById('memory-dump-content');
-        memDiv.innerHTML = '';
+        
+        // Exibe os dados de conectividade (Dutos + Nomes)
+        createTable('tab-dutos', ['Nome', 'Qtd', 'De', 'Para', 'Idx De', 'Idx Para'], data.dutos_view);
+        
+        // Exibe Geometria
+        createTable('tab-geom', ['L (m)', 'dy (m)', 'D (m)', 'Rug', 'U', 'Aço', 'Tamb'], data.geometria_in);
+        
+        // Exibe Nós (Junta Tipos ASCII e Valores)
+        const nosDisplay = data.nos_in.map((row, i) => {
+            const charType = String.fromCharCode(data.tipos_nos_in[i]);
+            return [charType, row[0], row[1]];
+        });
+        createTable('tab-nos', ['Tipo', 'Valor (P/Q/Vol)', 'Temp (K)'], nosDisplay);
 
-        const section = (title, content) => `<div class="mem-section"><div class="mem-header">${title}</div>${content}</div>`;
-        const scalar = (lbl, val) => `<div class="mem-row"><span class="mem-label">${lbl}</span><span class="mem-val">${val}</span></div>`;
-        const array = (lbl, arr) => {
-            const limit = 20;
-            const slice = arr.slice(0, limit);
-            const more = arr.length > limit ? `... (+${arr.length - limit})` : '';
-            return `<div class="mem-row" style="display:block; margin-top:5px;"><span class="mem-label">${lbl}</span><span class="mem-array">[ ${slice.join(', ')} ${more} ]</span></div>`;
-        };
+        // Exibe Equipamentos
+        createTable('tab-equip', ['Nome', 'Tipo', 'Valor', 'Duto', 'Pos'], data.equip_view);
 
-        const n_dutos = data.dutos_in.length;
-        const n_trechos = data.geometria_in.length;
-        const n_nos = data.nos_in.length;
-        const n_equip = data.equip_in.length;
-
-        let html = section("1. Dimensões", scalar("n_dutos", n_dutos) + scalar("n_trechos", n_trechos) + scalar("n_nos", n_nos) + scalar("n_equip", n_equip));
-
-        const flatDutos = flattenColMajor(n_dutos, 3, data.dutos_in);
-        html += section("2. Dutos (int*)", array(`[Qtd... Origem... Destino...]`, flatDutos));
-
-        const flatGeom = flattenColMajor(n_trechos, 7, data.geometria_in);
-        html += section("3. Geometria (double*)", array(`[L... dy... D...]`, flatGeom));
-
-        const flatNos = flattenColMajor(n_nos, 2, data.nos_in);
-        html += section("4. Nós (double*)", array(`[Val (P/Q/Vol)... Temp...]`, flatNos) + array(`int* tipos (ASCII)`, data.tipos_nos_in));
-
-        if (n_equip > 0) {
-            const flatEquip = flattenColMajor(n_equip, 2, data.equip_in);
-            html += section("5. Equipamentos", array(`int* equip [Duto... Tramo...]`, flatEquip) + array(`int* tipos`, data.tipos_equip_in) + array(`double* val`, data.val_equip));
-        }
-
-        const flatCI = flattenColMajor(n_trechos + n_dutos, 17, data.cond_inic_in);
-        html += section("6. Outros", array(`double* numerico`, data.numerico) + array(`double* cond_inic`, flatCI));
-
-        memDiv.innerHTML = html;
-
-        // Renderiza as tabelas Excel
-        createTable('tab-geom', ['L', 'dy', 'D', 'Rug', 'U', 'Aco', 'Tamb'], data.geometria_in);
-        createTable('tab-nos', ['Val (P/Q/Vol)', 'T (K)'], data.nos_in);
-        // Usa a VIEW para a tabela humana
-        createTable('tab-dutos', ['Nome', 'Qtd', 'De (Nome)', 'Para (Nome)', 'De (Idx)', 'Para (Idx)'], data.dutos_view);
+        // Exibe CI
         createTable('tab-ci', ['P', 'T', 'Q', '...'], data.cond_inic_in);
     }
 
     function createTable(id, h, r) {
-        let html = '<table class="excel-table"><thead><tr><th>#</th>' + h.map(x=>`<th>${x}</th>`).join('') + '</tr></thead><tbody>';
+        let html = '<table class="excel-table"><thead><tr><th class="idx">#</th>' + h.map(x=>`<th>${x}</th>`).join('') + '</tr></thead><tbody>';
         r.forEach((row,i) => {
-            html += `<tr><td class="idx">${i}</td>` + row.map(v => `<td class="num">${typeof v==='number'? (Math.abs(v)>1e4||Math.abs(v)<0.01?v.toExponential(2):v.toFixed(4)) : v}</td>`).join('') + '</tr>';
+            html += `<tr><td class="idx">${i}</td>` + row.map(v => {
+                let show = v;
+                if (typeof v === 'number' && !Number.isInteger(v)) show = (Math.abs(v)>1e4 || Math.abs(v)<0.01) ? v.toExponential(2) : v.toFixed(4);
+                return `<td class="num">${show}</td>`;
+            }).join('') + '</tr>';
         });
         document.getElementById(id).innerHTML = html + '</tbody></table>';
     }
@@ -340,18 +307,29 @@
         const btn = document.getElementById('btn-simular');
         btn.disabled = true;
         try {
-            log("Chamando wrapper...");
+            log("Enviando para Wrapper...");
+            // O Wrapper vai ler 'dutos_in', 'nos_in' (2D arrays) e achatar para a DLL.
+            GLOBAL_BUILT_DATA.numerico = getNumericParams();
+            
             const res = await window.runFluxoLib(GLOBAL_BUILT_DATA, 'Fluxo_TS_WASM');
             log(`Retorno: ${res.ret}`);
+            
             if(res.ret === 0) renderResults(res.cond_inic_in);
-            else alert("Erro Solver: " + res.ret);
+            else alert("Erro na execução (Retorno " + res.ret + ")");
         } catch(e) { log("Erro: " + e.message); }
         finally { btn.disabled = false; }
     }
 
     function renderResults(m) {
         document.getElementById('results-area').style.display = 'block';
-        createTable('res-table-container', ['P (bar)', 'T (C)', 'Q', 'Rho'], m.map(r=>[r[0]/1e5, r[1]-273.15, r[2], r[3]]));
+        // Plota resultados
+        const view = m.map(r=>[r[0]/1e5, r[1]-273.15, r[2], r[3]]);
+        let h = '<table class="excel-table"><thead><tr><th>#</th><th>P (bar)</th><th>T (°C)</th><th>Q (Vazão)</th><th>Rho</th></tr></thead><tbody>';
+        view.forEach((r,i) => {
+            if(Math.abs(r[0]) < 1e-9 && Math.abs(r[1]+273.15) < 1e-9) return; // Pula vazios
+            h+=`<tr><td>${i}</td><td class="num">${r[0].toFixed(2)}</td><td class="num">${r[1].toFixed(1)}</td><td class="num">${r[2].toFixed(4)}</td><td class="num">${r[3].toFixed(2)}</td></tr>`;
+        });
+        document.getElementById('res-table-container').innerHTML = h + '</tbody></table>';
     }
 </script>
 {% endblock %}
