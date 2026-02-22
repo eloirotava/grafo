@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>RotavaFlow - Ajuda</title>
+    <link rel="manifest" href="../static/manifest.json">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
+        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
+        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
+        .nav-link:hover { background-color: #444; color: white; }
+        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
+        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
+    </style>
+</head>
+<body>
+    <div class="menubar">
+        <a href="../index.html" class="nav-link">Início</a>
+        <a href="canvas.html" class="nav-link">Editor P&ID</a>
+        <a href="nodes.html" class="nav-link">Nós</a>
+        <a href="ducts.html" class="nav-link">Tubos</a>
+        <a href="equipments.html" class="nav-link">Equipamentos</a>
+        <a href="simulation.html" class="nav-link">Simulação</a>
+        <a href="reports.html" class="nav-link">Relatórios</a>
+        <a href="#" class="nav-link active" style="margin-left: auto;">Ajuda</a>
+    </div>
+
+    <div class="main-container">
+        <div style="padding: 40px; max-width: 900px; margin: 0 auto; line-height: 1.8; color: #333; font-family: 'Segoe UI', sans-serif;">
+            <h1 style="color: #0078d7; border-bottom: 2px solid #eee; padding-bottom: 15px;">Manual do RotavaFlow</h1>
+            <p style="font-size: 1.1em; color: #666;">
+                O <strong>RotavaFlow</strong> é um simulador de escoamento composicional de alta performance que roda inteiramente no seu navegador, inclusive offline.
+            </p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #0078d7; margin: 20px 0; border-radius: 4px;">
+                <strong>Dica Rápida:</strong> Você pode instalar este aplicativo no seu computador ou celular e usá-lo sem internet!
+            </div>
+
+            <h3 style="color: #444; margin-top: 30px;">1. Editor de Malha (Canvas)</h3>
+            <ul style="list-style-type: circle; margin-left: 20px;">
+                <li><strong>Arrastar e Soltar:</strong> Puxe nós, válvulas e equipamentos da barra lateral para a área de desenho.</li>
+                <li><strong>Conexões:</strong> Use a ferramenta "Duto" para ligar os componentes. As pontas se conectam automaticamente (snap) quando ficam verdes.</li>
+                <li><strong>Navegação Rápida:</strong> Dê <strong>duplo clique</strong> em qualquer componente (Nó, Válvula ou Duto) para ir direto à sua página de configuração.</li>
+                <li><strong>Salvar/Carregar:</strong> Use os botões na lateral para salvar seu projeto em arquivo <code>.rfm</code> (RotavaFlow Mesh).</li>
+            </ul>
+
+            <h3 style="color: #444; margin-top: 30px;">2. Configuração Física</h3>
+            <ul style="list-style-type: circle; margin-left: 20px;">
+                <li><strong>Nós:</strong> Defina pressão, temperatura e a composição química (C1, C2, CO2, etc.) de cada ponto.</li>
+                <li><strong>Dutos:</strong> Configure diâmetro, comprimento, rugosidade e troca térmica.</li>
+                <li><strong>Equipamentos:</strong> Ajuste a abertura de válvulas ou defina curvas de performance.</li>
+            </ul>
+
+            <h3 style="color: #444; margin-top: 30px;">3. Simulação & Relatórios</h3>
+            <p>
+                O motor de cálculo (Solver WASM) resolve as equações de balanço de massa, energia e momento.
+                Após a convergência (Código 0), vá para a aba <strong>Relatórios</strong> para visualizar gráficos interativos de pressão, temperatura e vazão ao longo da linha.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
+        }
+    </script>
+</body>
+</html>
