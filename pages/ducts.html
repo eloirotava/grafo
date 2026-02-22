@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>RotavaFlow - Tubos</title>
+    <link rel="manifest" href="../static/manifest.json">
+    <script src="../static/js/fabric.min.js"></script>
+    <script src="../static/js/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
+        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
+        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
+        .nav-link:hover { background-color: #444; color: white; }
+        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
+        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
+
+        /* Estilos específicos - Ducts */
+        .page-content { padding: 20px; width: 100%; max-width: 1600px; margin: 0 auto; height: calc(100vh - 80px); display: flex; flex-direction: column; }
+        h2 { color: #333; border-bottom: 2px solid #0078d7; padding-bottom: 10px; margin-bottom: 10px; }
+        .master-detail-container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+        .panel-left { width: 350px; display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
+        .panel-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .duct-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+        .duct-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
+        .duct-item:hover { background: #f0f8ff; }
+        .duct-item.active { background: #e3f2fd; border-left: 4px solid #0078d7; }
+        .duct-id { font-weight: bold; color: #333; }
+        .duct-sub { font-size: 11px; color: #666; margin-top: 2px; }
+        .panel-right { flex: 1; display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 4px; background: #fff; padding: 0; overflow: hidden; }
+        .empty-state { padding: 40px; text-align: center; color: #999; margin-top: 50px; }
+        .table-container { flex: 1; overflow: auto; padding: 10px; }
+        .geom-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .geom-table th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; text-align: left; padding: 8px; border-bottom: 2px solid #ddd; }
+        .geom-table td { border-bottom: 1px solid #eee; padding: 4px; }
+        input.cell-input { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 3px; }
+        input.cell-input:focus { border-color: #0078d7; outline: none; }
+        .btn-sm { padding: 2px 6px; font-size: 11px; cursor: pointer; }
+        .btn-add { background: #27ae60; color: white; border: none; border-radius: 3px; padding: 5px 10px; font-weight: bold; cursor: pointer; }
+        .btn-del { background: #e74c3c; color: white; border: none; border-radius: 3px; }
+        #save-status { color: green; font-weight: bold; opacity: 0; transition: opacity 0.5s; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="menubar">
+        <a href="../index.html" class="nav-link">Início</a>
+        <a href="canvas.html" class="nav-link">Editor P&ID</a>
+        <a href="nodes.html" class="nav-link">Nós</a>
+        <a href="#" class="nav-link active">Tubos</a>
+        <a href="equipments.html" class="nav-link">Equipamentos</a>
+        <a href="simulation.html" class="nav-link">Simulação</a>
+        <a href="reports.html" class="nav-link">Relatórios</a>
+        <a href="help.html" class="nav-link" style="margin-left: auto;">Ajuda</a>
+    </div>
+
+    <div class="main-container">
+        <div class="page-content">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Configuração de Dutos e Tramos</h2>
+                <div><span id="save-status">Salvo!</span></div>
+            </div>
+
+            <div class="master-detail-container">
+                <div class="panel-left">
+                    <div class="panel-header">Lista de Dutos</div>
+                    <ul class="duct-list" id="duct-list-container"></ul>
+                </div>
+                <div class="panel-right">
+                    <div class="panel-header">
+                        <span id="selected-duct-title">Selecione um duto</span>
+                        <button class="btn-add" onclick="addSegment()" id="btn-add-seg" style="display:none;">+ Adicionar Tramo</button>
+                    </div>
+                    <div id="geom-container" class="table-container">
+                        <div class="empty-state">Clique em um duto à esquerda para editar seus tramos.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
+        }
+    </script>
+
+    <script>
+        let globalData = {};
+        let currentDuctId = null;
+        let nodeMap = new Map();
+
+        function init() {
+            const raw = localStorage.getItem('malha_db_v2');
+            if (!raw) return;
+            globalData = JSON.parse(raw);
+
+            if(globalData.nodes) globalData.nodes.forEach(n => nodeMap.set(n.id, n.name));
+            if(!globalData.ducts) globalData.ducts = [];
+            if(!globalData.duct_geom) globalData.duct_geom = [];
+
+            renderDuctList();
+        }
+
+        function renderDuctList() {
+            const list = document.getElementById('duct-list-container');
+            list.innerHTML = '';
+            globalData.ducts.forEach(d => {
+                const li = document.createElement('li');
+                li.className = `duct-item ${currentDuctId === d.id ? 'active' : ''}`;
+                li.onclick = () => selectDuct(d.id);
+                const from = nodeMap.get(d.start_id) || d.start_id || '?';
+                const to = nodeMap.get(d.end_id) || d.end_id || '?';
+                li.innerHTML = `<div class="duct-id">${d.name} (${d.id})</div><div class="duct-sub">${from} &rarr; ${to}</div>`;
+                list.appendChild(li);
+            });
+        }
+
+        function selectDuct(id) {
+            currentDuctId = id;
+            renderDuctList(); 
+            const d = globalData.ducts.find(x => x.id === id);
+            document.getElementById('selected-duct-title').innerText = `Tramos de: ${d.name}`;
+            document.getElementById('btn-add-seg').style.display = 'block';
+            renderGeomTable();
+        }
+
+        function renderGeomTable() {
+            const container = document.getElementById('geom-container');
+            const segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+            segments.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
+
+            if(segments.length === 0) {
+                addSegment(true); 
+                return;
+            }
+
+            let html = `
+                <table class="geom-table">
+                    <thead>
+                        <tr>
+                            <th style="width:30px">#</th>
+                            <th title="Comprimento (m)">L (m)</th>
+                            <th title="Delta Elevação (m)">dy (m)</th>
+                            <th title="Diâmetro (m)">D (m)</th>
+                            <th title="Rugosidade (m)">Rug (m)</th>
+                            <th title="Coef. Troca Térmica">U</th>
+                            <th title="Temp. Ambiente (K)">Tamb (K)</th>
+                            <th title="Material/Aço">Aço</th>
+                            <th style="width:30px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            segments.forEach((g, idx) => {
+                const L = g.L !== undefined ? g.L : (g.length || 0);
+                const D = g.D !== undefined ? g.D : (g.diameter || 0);
+                const rug = g.rug !== undefined ? g.rug : (g.roughness || 0);
+                const dy = g.dy || 0;
+                const U = g.U || 0;
+                const Tamb = g.Tamb || 298;
+                const aco = g.aco || "0";
+
+                g.L = L; g.D = D; g.rug = rug; g.dy = dy; g.U = U; g.Tamb = Tamb; g.aco = aco;
+
+                html += `
+                    <tr>
+                        <td style="text-align:center;">${idx}</td>
+                        <td><input type="number" class="cell-input" value="${L}" step="0.1" onchange="updateGeom(${idx}, 'L', this.value)"></td>
+                        <td><input type="number" class="cell-input" value="${dy}" step="0.1" onchange="updateGeom(${idx}, 'dy', this.value)"></td>
+                        <td><input type="number" class="cell-input" value="${D}" step="0.0001" onchange="updateGeom(${idx}, 'D', this.value)"></td>
+                        <td><input type="number" class="cell-input" value="${rug}" step="0.00001" onchange="updateGeom(${idx}, 'rug', this.value)"></td>
+                        <td><input type="number" class="cell-input" value="${U}" step="0.1" onchange="updateGeom(${idx}, 'U', this.value)"></td>
+                        <td><input type="number" class="cell-input" value="${Tamb}" step="0.1" onchange="updateGeom(${idx}, 'Tamb', this.value)"></td>
+                        <td><input type="text" class="cell-input" value="${aco}" onchange="updateGeom(${idx}, 'aco', this.value)"></td>
+                        <td><button class="btn-del btn-sm" onclick="delSegment(${idx})">X</button></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        window.addSegment = function(silent = false) {
+            if(!currentDuctId) return;
+            const existing = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+            const last = existing.length > 0 ? existing[existing.length-1] : null;
+
+            const newSeg = {
+                duct_id: currentDuctId,
+                seg_index: existing.length,
+                L: last ? last.L : 100,
+                dy: 0,
+                D: last ? last.D : 0.1,
+                rug: last ? last.rug : 0.000045,
+                U: last ? last.U : 0,
+                aco: last ? last.aco : "0",
+                Tamb: last ? last.Tamb : 298
+            };
+
+            globalData.duct_geom.push(newSeg);
+            save();
+            renderGeomTable();
+        };
+
+        window.delSegment = function(idxDisplay) {
+            if(!currentDuctId) return;
+            let segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+            segments.sort((a,b) => a.seg_index - b.seg_index);
+            
+            const toRemove = segments[idxDisplay];
+            if(!toRemove) return;
+
+            const globalIdx = globalData.duct_geom.indexOf(toRemove);
+            if(globalIdx > -1) globalData.duct_geom.splice(globalIdx, 1);
+
+            const remaining = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+            remaining.sort((a,b) => a.seg_index - b.seg_index);
+            remaining.forEach((g, i) => g.seg_index = i);
+
+            save();
+            renderGeomTable();
+        };
+
+        window.updateGeom = function(idxDisplay, field, value) {
+            let segments = globalData.duct_geom.filter(g => g.duct_id === currentDuctId);
+            segments.sort((a,b) => a.seg_index - b.seg_index);
+            const seg = segments[idxDisplay];
+            if(seg) {
+                if(field === 'aco') seg[field] = value;
+                else seg[field] = parseFloat(value);
+                save();
+            }
+        };
+
+        function save() {
+            localStorage.setItem('malha_db_v2', JSON.stringify(globalData));
+            const status = document.getElementById('save-status');
+            status.style.opacity = 1;
+            setTimeout(() => status.style.opacity = 0, 1500);
+        }
+
+        init();
+    </script>
+</body>
+</html>

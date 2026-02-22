@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>RotavaFlow - Relatórios</title>
+    <link rel="manifest" href="../static/manifest.json">
+    <script src="../static/js/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
+        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
+        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
+        .nav-link:hover { background-color: #444; color: white; }
+        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
+        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
+
+        /* Estilos específicos - Reports */
+        .page-content { padding: 30px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        .report-controls { display: flex; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        .control-group label { font-size: 12px; font-weight: bold; color: #666; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; min-width: 200px; }
+        .chart-panel { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="menubar">
+        <a href="../index.html" class="nav-link">Início</a>
+        <a href="canvas.html" class="nav-link">Editor P&ID</a>
+        <a href="nodes.html" class="nav-link">Nós</a>
+        <a href="ducts.html" class="nav-link">Tubos</a>
+        <a href="equipments.html" class="nav-link">Equipamentos</a>
+        <a href="simulation.html" class="nav-link">Simulação</a>
+        <a href="#" class="nav-link active">Relatórios</a>
+        <a href="help.html" class="nav-link" style="margin-left: auto;">Ajuda</a>
+    </div>
+
+    <div class="main-container">
+        <div class="page-content">
+            <h2>Relatórios - Perfis Proporcionais</h2>
+            
+            <div id="no-data" style="padding: 50px; text-align: center; color: #999;">
+                Nenhum dado encontrado. Execute a simulação primeiro na aba Simulação.
+            </div>
+
+            <div id="main-report" style="display: none;">
+                <div class="report-controls">
+                    <div class="control-group">
+                        <label>Duto</label>
+                        <select id="sel-duto" onchange="updateChart()"></select>
+                    </div>
+                    <div class="control-group">
+                        <label>Variável</label>
+                        <select id="sel-var" onchange="updateChart()">
+                            <optgroup label="Física">
+                                <option value="0">Pressão (bar)</option>
+                                <option value="1">Temperatura (°C)</option>
+                                <option value="2">Vazão (kg/s)</option>
+                            </optgroup>
+                            <optgroup label="Composição (%)" id="opt-comp">
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-panel">
+                    <canvas id="mainChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
+        }
+    </script>
+
+    <script>
+        const SPECIES = ['N2','CO2','C1','C2','iC3','nC3','iC4','nC4','C5','C6','C7','C8','C9','C10+'];
+        let REPORT_DATA = null;
+        let chartInstance = null;
+
+        function init() {
+            const raw = localStorage.getItem('last_sim_report');
+            if (!raw) return;
+            REPORT_DATA = JSON.parse(raw);
+
+            document.getElementById('no-data').style.display = 'none';
+            document.getElementById('main-report').style.display = 'block';
+
+            const selDuto = document.getElementById('sel-duto');
+            REPORT_DATA.dutos_view.forEach((d, i) => {
+                const opt = new Option(`${d[0]} (${d[2]} → ${d[3]})`, i);
+                selDuto.add(opt);
+            });
+
+            const optComp = document.getElementById('opt-comp');
+            SPECIES.forEach((sp, i) => {
+                const opt = new Option(sp, i + 3); 
+                optComp.appendChild(opt);
+            });
+
+            updateChart();
+        }
+
+        function updateChart() {
+            const dutoIdx = parseInt(document.getElementById('sel-duto').value);
+            const varIdx = parseInt(document.getElementById('sel-var').value);
+            
+            let startPos = 0;
+            let startGeom = 0;
+            for(let i=0; i < dutoIdx; i++) {
+                const segs = REPORT_DATA.dutos[i][0];
+                startPos += (segs + 1); 
+                startGeom += segs;      
+            }
+
+            const numSegs = REPORT_DATA.dutos[dutoIdx][0];
+            const ductResults = REPORT_DATA.results.slice(startPos, startPos + numSegs + 1);
+            const ductGeom = REPORT_DATA.geometria.slice(startGeom, startGeom + numSegs);
+
+            let xNodes = [0];
+            let acc = 0;
+            ductGeom.forEach(g => { 
+                acc += parseFloat(g[0]); 
+                xNodes.push(acc); 
+            });
+
+            let chartPoints = [];
+            const isFlow = (varIdx === 2);
+
+            if (isFlow) {
+                for(let i=0; i < numSegs; i++) {
+                    let val = ductResults[i][varIdx];
+                    let midX = (xNodes[i] + xNodes[i+1]) / 2;
+                    chartPoints.push({ x: midX, y: val });
+                }
+            } else {
+                for(let i=0; i <= numSegs; i++) {
+                    let val = ductResults[i][varIdx];
+                    if (varIdx === 0) val = val / 1e5;     
+                    if (varIdx === 1) val = val - 273.15;  
+                    chartPoints.push({ x: xNodes[i], y: val });
+                }
+            }
+
+            const varLabel = document.getElementById('sel-var').options[document.getElementById('sel-var').selectedIndex].text;
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: varLabel,
+                        data: chartPoints,
+                        borderColor: '#0078d7',
+                        backgroundColor: 'rgba(0,120,215,0.1)',
+                        fill: !isFlow, 
+                        tension: 0,
+                        pointRadius: 4,
+                        showLine: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: 'Posição no Duto (m)' } },
+                        y: { beginAtZero: false, title: { display: true, text: varLabel } }
+                    }
+                }
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
