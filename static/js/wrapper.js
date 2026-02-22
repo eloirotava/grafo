@@ -7,7 +7,7 @@ let _fnDt = null;
 export async function initFluxoWasm() {
     if (_mod) return _mod;
     const dynamicImport = new Function('path', 'return import(path)');
-    const fluxoUrl = '../static/wasm/fluxo.js';
+    const fluxoUrl = '../wasm/fluxo.js';
     const ModuleFactory = (await dynamicImport(fluxoUrl)).default;
     _mod = await ModuleFactory({
         locateFile: (path) => path.endsWith('.wasm') ? '../static/wasm/fluxo.wasm' : path
