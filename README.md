@@ -63,6 +63,10 @@ Depois abra:
 | `static/js/pwa.js` | Registro centralizado do Service Worker. |
 | `sw.js` | Cache offline das páginas e assets principais. |
 
+## 🗺️ Roadmap
+
+As próximas melhorias planejadas estão em [`docs/roadmap.md`](docs/roadmap.md), incluindo validação da malha, documentação do `.rfm`, relatórios melhores e acabamento PWA.
+
 ## 📴 Uso offline
 
 No primeiro acesso via servidor HTTP, o navegador instala o PWA e armazena o app shell em cache. Depois disso, o RotavaFlow consegue abrir as telas principais e carregar o solver mesmo sem rede.
