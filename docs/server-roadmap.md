@@ -1,30 +1,36 @@
-# Sugestões iniciais para o servidor RotavaFlow
+# Roadmap do servidor RotavaFlow
 
-Este servidor já entrega uma PWA simples com templates Askama, assets embutidos e o módulo WASM. Para um software de simulação de escoamento, eu começaria evoluindo em camadas pequenas e verificáveis.
+O servidor agora saiu do estágio de páginas estáticas e ganhou uma superfície mínima de API para apoiar um software de simulação de escoamento. A ideia é manter o avanço em camadas pequenas, testáveis e fáceis de trocar quando o solver definitivo entrar.
 
-## 1. Saúde e diagnóstico
+## 1. Saúde e diagnóstico — implementado
 
-- Expor um endpoint `/health` para confirmar que o servidor está online, qual versão está rodando e quais módulos principais estão disponíveis.
-- Usar esse endpoint em scripts de inicialização, testes automatizados e telas futuras de suporte.
+- Endpoint `/health` retorna nome do serviço, status, versão, schema e módulos principais.
+- Endpoint `/metrics` retorna uptime e contadores de projetos, validações e simulações.
+- Logs simples no terminal registram salvamento, validação e execução.
 
-## 2. API de projeto
+## 2. API de projeto — implementado como armazenamento em memória
 
-- Criar endpoints para salvar, carregar e validar projetos de malha.
-- Definir um formato JSON versionado para nós, tubos, equipamentos, condições de contorno e metadados do modelo.
-- Validar entradas antes de enviar dados ao WASM, evitando simulações com unidades incompatíveis ou topologia incompleta.
+- `POST /api/projects` cria projetos JSON versionados.
+- `GET /api/projects` lista resumos dos projetos salvos.
+- `GET /api/projects/:id` carrega um projeto.
+- `PUT /api/projects/:id` atualiza ou cria um projeto com ID conhecido.
+- `POST /api/projects/:id/validate` valida topologia, referências e dimensões.
 
-## 3. Execução de simulação
+## 3. Execução de simulação — implementado como solver simplificado
 
-- Separar a execução em uma rota de API dedicada, por exemplo `/api/simulations`.
-- Retornar estados de simulação como `queued`, `running`, `completed` e `failed`.
-- Armazenar erros numéricos e mensagens de convergência de forma estruturada para alimentar a tela de relatórios.
+- `POST /api/simulations` aceita `project_id` ou um `project` inline.
+- O relatório registra status atual e histórico com `queued`, `running`, `completed` ou `failed`.
+- O cálculo atual estima vazão a partir de comprimento total, diâmetro médio e pressão diferencial, servindo como contrato para substituir pelo solver real.
 
-## 4. Observabilidade técnica
+## 4. Observabilidade técnica — implementado de forma inicial
 
-- Adicionar logs com tempo de execução, tamanho da malha, número de iterações e erro residual final.
-- Criar métricas simples para detectar regressões de desempenho.
-- Guardar relatórios de simulação com versão do solver e parâmetros usados.
+- Métricas de projetos salvos, validações, simulações iniciadas, concluídas e falhas.
+- Registro de tempo da última simulação.
+- Relatório de simulação inclui versão do solver, residual, iterações, erros de validação e resultados agregados.
 
-## 5. Caminho recomendado
+## 5. Próxima evolução recomendada
 
-A primeira melhoria implementada nesta branch é o endpoint `/health`, porque ele é pequeno, fácil de testar e cria uma base para automação e suporte operacional.
+- Persistência local para projetos e relatórios.
+- Testes automatizados de contrato da API.
+- Integração do endpoint de simulação com o módulo WASM/nativo definitivo.
+- Métricas em formato Prometheus quando houver necessidade de monitoramento externo.
