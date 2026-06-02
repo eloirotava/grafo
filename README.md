@@ -7,7 +7,7 @@
 - **Editor P&ID visual:** monte a malha arrastando nós, equipamentos, válvulas e dutos no canvas.
 - **Configuração física:** edite propriedades dos nós, geometria dos dutos, composições e parâmetros de equipamentos.
 - **Simulação no navegador:** carregamento do solver WASM em `static/wasm` pela tela de Simulação.
-- **Relatórios:** visualização dos resultados salvos da última simulação em gráficos e tabelas.
+- **Relatórios:** visualização dos resultados salvos da última simulação em cards, gráficos e exportações JSON/CSV.
 - **Projetos portáveis:** salve e carregue arquivos `.rfm` para continuar o trabalho em outra máquina.
 - **PWA/offline:** o Service Worker mantém as páginas, bibliotecas e o solver em cache para uso sem internet depois do primeiro acesso.
 
@@ -71,7 +71,7 @@ As próximas melhorias planejadas estão em [`docs/roadmap.md`](docs/roadmap.md)
 
 No primeiro acesso via servidor HTTP, o navegador instala o PWA e armazena o app shell em cache. Depois disso, o RotavaFlow consegue abrir as telas principais e carregar o solver mesmo sem rede.
 
-Se alguma alteração não aparecer durante desenvolvimento, limpe o cache do navegador ou recarregue ignorando cache. O cache atual usa a chave `rotavaflow-static-v2`.
+Se alguma alteração não aparecer durante desenvolvimento, limpe o cache do navegador ou recarregue ignorando cache. O cache atual usa a chave `rotavaflow-static-v3`.
 
 ## 🧪 Checklist rápido para desenvolvimento
 

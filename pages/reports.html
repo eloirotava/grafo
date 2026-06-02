@@ -14,13 +14,21 @@
         .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
         .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
 
-        /* Estilos específicos - Reports */
         .page-content { padding: 30px; max-width: 1200px; margin: 0 auto; width: 100%; }
-        .report-controls { display: flex; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; }
+        .report-controls { display: flex; flex-wrap: wrap; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; }
         .control-group { display: flex; flex-direction: column; gap: 5px; }
         .control-group label { font-size: 12px; font-weight: bold; color: #666; }
         select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; min-width: 200px; }
         .chart-panel { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+        .empty-state { padding: 50px; text-align: center; color: #666; background: white; border: 1px dashed #bbb; border-radius: 8px; }
+        .empty-state a { color: #0078d7; font-weight: 700; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .metric-card { background: white; border: 1px solid #ddd; border-left: 4px solid #0078d7; border-radius: 6px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .metric-card span { display: block; font-size: 12px; color: #667; margin-bottom: 6px; }
+        .metric-card strong { font-size: 20px; color: #223; }
+        .meta-panel { background: #fff; border: 1px solid #ddd; padding: 12px 14px; border-radius: 6px; margin-bottom: 15px; color: #555; font-size: 13px; line-height: 1.6; }
+        .btn { border: none; border-radius: 4px; padding: 9px 14px; font-weight: 700; cursor: pointer; background: #0078d7; color: white; }
+        .btn.secondary { background: #555; }
     </style>
 </head>
 <body>
@@ -38,12 +46,18 @@
     <div class="main-container">
         <div class="page-content">
             <h2>Relatórios - Perfis Proporcionais</h2>
-            
-            <div id="no-data" style="padding: 50px; text-align: center; color: #999;">
-                Nenhum dado encontrado. Execute a simulação primeiro na aba Simulação.
+            <div id="project-summary"></div>
+
+            <div id="no-data" class="empty-state">
+                <h3>Nenhum relatório encontrado</h3>
+                <p>Execute uma simulação primeiro para gerar gráficos e métricas.</p>
+                <a href="simulation.html">Ir para Simulação</a>
             </div>
 
             <div id="main-report" style="display: none;">
+                <div id="report-meta" class="meta-panel"></div>
+                <div id="summary-grid" class="summary-grid"></div>
+
                 <div class="report-controls">
                     <div class="control-group">
                         <label>Duto</label>
@@ -57,9 +71,12 @@
                                 <option value="1">Temperatura (°C)</option>
                                 <option value="2">Vazão (kg/s)</option>
                             </optgroup>
-                            <optgroup label="Composição (%)" id="opt-comp">
-                            </optgroup>
+                            <optgroup label="Composição (%)" id="opt-comp"></optgroup>
                         </select>
+                    </div>
+                    <div class="control-group" style="justify-content:flex-end; flex-direction:row; align-items:end;">
+                        <button class="btn" onclick="downloadReportJson()">Baixar JSON</button>
+                        <button class="btn secondary" onclick="downloadCurrentCsv()">Baixar CSV do gráfico</button>
                     </div>
                 </div>
 
@@ -70,76 +87,122 @@
         </div>
     </div>
 
-
     <script>
         const SPECIES = ['N2','CO2','C1','C2','iC3','nC3','iC4','nC4','C5','C6','C7','C8','C9','C10+'];
         let REPORT_DATA = null;
         let chartInstance = null;
+        let lastChartPoints = [];
 
         function init() {
             const raw = localStorage.getItem('last_sim_report');
             if (!raw) return;
-            REPORT_DATA = JSON.parse(raw);
+            try {
+                REPORT_DATA = JSON.parse(raw);
+            } catch (error) {
+                document.getElementById('no-data').innerHTML = '<h3>Relatório corrompido</h3><p>Rode a simulação novamente para gerar um relatório válido.</p>';
+                return;
+            }
+
+            if (!REPORT_DATA.results || !REPORT_DATA.dutos || !REPORT_DATA.dutos_view) return;
 
             document.getElementById('no-data').style.display = 'none';
             document.getElementById('main-report').style.display = 'block';
 
+            renderMeta();
+            renderSummaryCards();
+            fillSelectors();
+            updateChart();
+        }
+
+        function renderMeta() {
+            const created = REPORT_DATA.created_at ? new Date(REPORT_DATA.created_at).toLocaleString('pt-BR') : 'não informado';
+            const duration = REPORT_DATA.duration_ms !== undefined ? `${REPORT_DATA.duration_ms} ms` : 'não informado';
+            const ret = REPORT_DATA.solver_return !== undefined ? REPORT_DATA.solver_return : 'não informado';
+            const status = REPORT_DATA.status || 'legado';
+            document.getElementById('report-meta').innerHTML = `
+                <strong>Status:</strong> ${status} &nbsp;•&nbsp;
+                <strong>Solver:</strong> ${REPORT_DATA.solver || 'Fluxo_TS_WASM'} &nbsp;•&nbsp;
+                <strong>Código:</strong> ${ret} &nbsp;•&nbsp;
+                <strong>Duração:</strong> ${duration} &nbsp;•&nbsp;
+                <strong>Gerado em:</strong> ${created}
+            `;
+        }
+
+        function renderSummaryCards() {
+            const rows = REPORT_DATA.results || [];
+            const pressures = rows.map(r => Number(r[0]) / 1e5).filter(Number.isFinite);
+            const temps = rows.map(r => Number(r[1]) - 273.15).filter(Number.isFinite);
+            const flows = rows.map(r => Number(r[2])).filter(Number.isFinite);
+            const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+            const min = (arr) => arr.length ? Math.min(...arr) : 0;
+            const max = (arr) => arr.length ? Math.max(...arr) : 0;
+            const cards = [
+                ['Pressão mín.', `${min(pressures).toFixed(2)} bar`],
+                ['Pressão máx.', `${max(pressures).toFixed(2)} bar`],
+                ['Temp. mín.', `${min(temps).toFixed(1)} °C`],
+                ['Temp. máx.', `${max(temps).toFixed(1)} °C`],
+                ['Vazão média', `${avg(flows).toFixed(3)} kg/s`],
+                ['Dutos', `${(REPORT_DATA.dutos || []).length}`],
+            ];
+
+            document.getElementById('summary-grid').innerHTML = cards.map(([label, value]) => `
+                <div class="metric-card"><span>${label}</span><strong>${value}</strong></div>
+            `).join('');
+        }
+
+        function fillSelectors() {
             const selDuto = document.getElementById('sel-duto');
+            selDuto.innerHTML = '';
             REPORT_DATA.dutos_view.forEach((d, i) => {
-                const opt = new Option(`${d[0]} (${d[2]} → ${d[3]})`, i);
+                const opt = new Option(`${d[0] || `Duto ${i + 1}`} (${d[2] || '?'} → ${d[3] || '?'})`, i);
                 selDuto.add(opt);
             });
 
             const optComp = document.getElementById('opt-comp');
-            SPECIES.forEach((sp, i) => {
-                const opt = new Option(sp, i + 3); 
-                optComp.appendChild(opt);
-            });
-
-            updateChart();
+            optComp.innerHTML = '';
+            SPECIES.forEach((sp, i) => optComp.appendChild(new Option(sp, i + 3)));
         }
 
-        function updateChart() {
+        function getCurrentChartData() {
             const dutoIdx = parseInt(document.getElementById('sel-duto').value);
             const varIdx = parseInt(document.getElementById('sel-var').value);
-            
             let startPos = 0;
             let startGeom = 0;
-            for(let i=0; i < dutoIdx; i++) {
+            for(let i = 0; i < dutoIdx; i++) {
                 const segs = REPORT_DATA.dutos[i][0];
-                startPos += (segs + 1); 
-                startGeom += segs;      
+                startPos += (segs + 1);
+                startGeom += segs;
             }
 
             const numSegs = REPORT_DATA.dutos[dutoIdx][0];
             const ductResults = REPORT_DATA.results.slice(startPos, startPos + numSegs + 1);
             const ductGeom = REPORT_DATA.geometria.slice(startGeom, startGeom + numSegs);
-
-            let xNodes = [0];
+            const xNodes = [0];
             let acc = 0;
-            ductGeom.forEach(g => { 
-                acc += parseFloat(g[0]); 
-                xNodes.push(acc); 
+            ductGeom.forEach(g => {
+                acc += parseFloat(g[0]);
+                xNodes.push(acc);
             });
 
-            let chartPoints = [];
+            const chartPoints = [];
             const isFlow = (varIdx === 2);
-
             if (isFlow) {
-                for(let i=0; i < numSegs; i++) {
-                    let val = ductResults[i][varIdx];
-                    let midX = (xNodes[i] + xNodes[i+1]) / 2;
-                    chartPoints.push({ x: midX, y: val });
+                for(let i = 0; i < numSegs; i++) {
+                    chartPoints.push({ x: (xNodes[i] + xNodes[i + 1]) / 2, y: ductResults[i][varIdx] });
                 }
             } else {
-                for(let i=0; i <= numSegs; i++) {
+                for(let i = 0; i <= numSegs; i++) {
                     let val = ductResults[i][varIdx];
-                    if (varIdx === 0) val = val / 1e5;     
-                    if (varIdx === 1) val = val - 273.15;  
+                    if (varIdx === 0) val = val / 1e5;
+                    if (varIdx === 1) val = val - 273.15;
                     chartPoints.push({ x: xNodes[i], y: val });
                 }
             }
+            return chartPoints;
+        }
 
+        function updateChart() {
+            lastChartPoints = getCurrentChartData();
             const varLabel = document.getElementById('sel-var').options[document.getElementById('sel-var').selectedIndex].text;
             const ctx = document.getElementById('mainChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
@@ -149,10 +212,10 @@
                 data: {
                     datasets: [{
                         label: varLabel,
-                        data: chartPoints,
+                        data: lastChartPoints,
                         borderColor: '#0078d7',
                         backgroundColor: 'rgba(0,120,215,0.1)',
-                        fill: !isFlow, 
+                        fill: document.getElementById('sel-var').value !== '2',
                         tension: 0,
                         pointRadius: 4,
                         showLine: true
@@ -168,8 +231,29 @@
             });
         }
 
+        function downloadBlob(filename, content, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadReportJson() {
+            downloadBlob('rotavaflow-relatorio.json', JSON.stringify(REPORT_DATA, null, 2), 'application/json');
+        }
+
+        function downloadCurrentCsv() {
+            const label = document.getElementById('sel-var').options[document.getElementById('sel-var').selectedIndex].text;
+            const rows = [['posicao_m', label], ...lastChartPoints.map(p => [p.x, p.y])];
+            downloadBlob('rotavaflow-grafico.csv', rows.map(row => row.join(';')).join('\n'), 'text/csv;charset=utf-8');
+        }
+
         init();
     </script>
+    <script src="../static/js/project-summary.js" defer></script>
     <script src="../static/js/pwa.js" defer></script>
 </body>
 </html>

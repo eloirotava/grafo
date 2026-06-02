@@ -2,12 +2,12 @@
 
 Este documento registra o que ainda vale fazer no RotavaFlow como aplicação web offline-first. A ideia é priorizar melhorias que aumentem estabilidade, clareza dos dados e confiança na simulação sem complicar a distribuição estática.
 
-## 1. Conteúdo e experiência do usuário
+## 1. Conteúdo e experiência do usuário — iniciado
 
 - Padronizar textos das telas para usar os mesmos nomes: **nós**, **tubos/dutos**, **equipamentos**, **simulação** e **relatórios**.
-- Melhorar a página de Ajuda com exemplos curtos de um projeto completo: criar dois nós, conectar um duto, configurar propriedades e rodar a simulação.
-- Adicionar avisos visuais quando não houver projeto salvo no navegador ou quando a malha estiver incompleta.
-- Exibir um resumo do projeto atual no topo das páginas de configuração: quantidade de nós, dutos, válvulas/equipamentos e última alteração.
+- Melhorar a página de Ajuda com exemplos curtos de um projeto completo: criar dois nós, conectar um duto, configurar propriedades e rodar a simulação. **Feito: exemplo rápido adicionado.**
+- Adicionar avisos visuais quando não houver projeto salvo no navegador ou quando a malha estiver incompleta. **Feito: resumo/aviso de projeto nas telas principais.**
+- Exibir um resumo do projeto atual no topo das páginas de configuração: quantidade de nós, dutos, válvulas/equipamentos e última alteração. **Parcial: contadores principais adicionados.**
 
 ## 2. Dados e arquivo `.rfm`
 
@@ -16,18 +16,18 @@ Este documento registra o que ainda vale fazer no RotavaFlow como aplicação we
 - Incluir `schema_version` no arquivo salvo para permitir migrações futuras sem quebrar projetos antigos.
 - Adicionar um botão de exportação legível em JSON além do `.rfm` comprimido, útil para depuração.
 
-## 3. Simulação WASM
+## 3. Simulação WASM — iniciado
 
-- Mostrar estado de carregamento do solver WASM com mensagens claras: carregando, pronto, executando, convergiu ou falhou.
-- Transformar erros do solver em mensagens de usuário, evitando mostrar apenas exceções técnicas.
-- Registrar no relatório os parâmetros numéricos usados, número de iterações, código de retorno e tempo de execução.
+- Mostrar estado de carregamento do solver WASM com mensagens claras: carregando, pronto, executando, convergiu ou falhou. **Feito.**
+- Transformar erros do solver em mensagens de usuário, evitando mostrar apenas exceções técnicas. **Parcial: mensagens de validação e falha do solver adicionadas.**
+- Registrar no relatório os parâmetros numéricos usados, número de iterações, código de retorno e tempo de execução. **Parcial: parâmetros, código e duração adicionados; iterações dependem do solver expor esse dado.**
 - Criar um caso de teste manual com uma malha pequena conhecida para conferir se os resultados continuam coerentes após mudanças.
 
-## 4. Relatórios
+## 4. Relatórios — iniciado
 
-- Melhorar a tela de Relatórios para mostrar cards de resumo: pressão mínima/máxima, temperatura mínima/máxima, vazão média e status de convergência.
-- Permitir baixar o relatório em JSON ou CSV.
-- Mostrar quando não existe `last_sim_report` no navegador e orientar o usuário a rodar a simulação primeiro.
+- Melhorar a tela de Relatórios para mostrar cards de resumo: pressão mínima/máxima, temperatura mínima/máxima, vazão média e status de convergência. **Feito.**
+- Permitir baixar o relatório em JSON ou CSV. **Feito: JSON completo e CSV do gráfico atual.**
+- Mostrar quando não existe `last_sim_report` no navegador e orientar o usuário a rodar a simulação primeiro. **Feito.**
 - Adicionar comparação simples entre duas simulações salvas, se houver histórico local.
 
 ## 5. PWA e distribuição

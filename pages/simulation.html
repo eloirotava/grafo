@@ -26,6 +26,17 @@
         .btn-run:disabled { background: #ccc; cursor: not-allowed; transform: none; }
         .status-box { padding: 15px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 13px; background: #222; color: #0f0; min-height: 80px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
         .success-badge { display: none; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 15px; border-radius: 4px; text-align: center; margin-top: 20px; font-weight: bold; }
+        .solver-state { display: flex; gap: 10px; align-items: center; padding: 12px 14px; margin-bottom: 15px; border-radius: 6px; background: #f8f9fa; border: 1px solid #ddd; font-size: 13px; }
+        .state-dot { width: 10px; height: 10px; border-radius: 50%; background: #999; box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
+        .solver-state.ready .state-dot { background: #28a745; }
+        .solver-state.running .state-dot { background: #f0ad4e; }
+        .solver-state.error .state-dot { background: #c0392b; }
+        .validation-box { display: none; padding: 12px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; line-height: 1.5; }
+        .validation-box.ok { display: block; border: 1px solid #b7dfc2; background: #f2fbf4; color: #155724; }
+        .validation-box.warn { display: block; border: 1px solid #f0d49b; background: #fff8e8; color: #7a5200; }
+        .validation-box.error { display: block; border: 1px solid #e3a6a1; background: #fff0ef; color: #8f1f15; }
+        .validation-box ul { margin: 6px 0 0 18px; padding: 0; }
+
     </style>
 </head>
 <body>
@@ -43,7 +54,16 @@
     <div class="main-container">
         <div class="page-content">
             <h2>Simulação</h2>
+            <div id="project-summary"></div>
             
+            <div id="solver-state" class="solver-state">
+                <span class="state-dot"></span>
+                <strong>Solver WASM:</strong>
+                <span id="solver-state-text">aguardando carregamento...</span>
+            </div>
+
+            <div id="validation-box" class="validation-box"></div>
+
             <div class="panel">
                 <h3>Parâmetros do Solver</h3>
                 <div class="form-group"><label>Rastreio (Track)</label><input type="number" id="inp-track" value="0.5" step="0.1"></div>
@@ -73,11 +93,82 @@
 
     <script type="module">
         import { runFluxo } from '../static/js/wrapper.js';
-        window.runFluxoLib = runFluxo; 
+        window.runFluxoLib = runFluxo;
+        window.dispatchEvent(new Event('fluxo-wasm-wrapper-ready'));
+        const state = document.getElementById('solver-state');
+        const text = document.getElementById('solver-state-text');
+        state.className = 'solver-state ready';
+        text.innerText = 'wrapper carregado; pronto para inicializar ao rodar.';
     </script>
 
     <script>
         let GLOBAL_BUILT_DATA = null;
+
+        function setSolverState(status, message) {
+            const state = document.getElementById('solver-state');
+            const text = document.getElementById('solver-state-text');
+            state.className = `solver-state ${status}`;
+            text.innerText = message;
+        }
+
+        function waitForSolverWrapper() {
+            if (window.runFluxoLib) return Promise.resolve();
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Wrapper do solver WASM não carregou. Recarregue a página e tente novamente.')), 8000);
+                window.addEventListener('fluxo-wasm-wrapper-ready', () => {
+                    clearTimeout(timeout);
+                    resolve();
+                }, { once: true });
+            });
+        }
+
+        function validateSimulationData(data) {
+            const errors = [];
+            const warnings = [];
+            const nodes = (data.nodes || []).filter(n => n.type !== 'valve' && n.type !== 'A');
+            const ducts = data.ducts || [];
+            const nodeIds = new Set(nodes.map(n => String(n.id)));
+
+            if (nodes.length < 2) errors.push('Crie pelo menos dois nós para simular uma malha.');
+            if (ducts.length < 1) errors.push('Crie pelo menos um duto conectado entre nós.');
+
+            ducts.forEach(d => {
+                if (!d.start_id || !d.end_id) errors.push(`Duto ${d.name || d.id} precisa estar conectado nas duas pontas.`);
+                if (d.start_id && !nodeIds.has(String(d.start_id))) errors.push(`Duto ${d.name || d.id} referencia nó inicial inexistente.`);
+                if (d.end_id && !nodeIds.has(String(d.end_id))) errors.push(`Duto ${d.name || d.id} referencia nó final inexistente.`);
+                const segs = (data.duct_geom || []).filter(g => String(g.duct_id) === String(d.id));
+                if (segs.length === 0) warnings.push(`Duto ${d.name || d.id} não tem geometria detalhada; serão usados valores padrão.`);
+                segs.forEach(seg => {
+                    const length = parseFloat(seg.L || seg.length || 0);
+                    const diameter = parseFloat(seg.D || seg.diameter || 0);
+                    if (length <= 0) errors.push(`Tramo ${seg.seg_index ?? '?'} do duto ${d.name || d.id} precisa de comprimento positivo.`);
+                    if (diameter <= 0) errors.push(`Tramo ${seg.seg_index ?? '?'} do duto ${d.name || d.id} precisa de diâmetro positivo.`);
+                });
+            });
+
+            nodes.forEach(n => {
+                const comps = (data.node_composition || []).filter(c => String(c.node_id) === String(n.id));
+                if (comps.length === 0) warnings.push(`Nó ${n.name || n.id} sem composição definida; composição inicial pode ficar zerada.`);
+            });
+
+            return { valid: errors.length === 0, errors, warnings, counts: { nodes: nodes.length, ducts: ducts.length } };
+        }
+
+        function showValidationReport(report) {
+            const box = document.getElementById('validation-box');
+            const items = [...report.errors, ...report.warnings];
+            if (!items.length) {
+                box.className = 'validation-box ok';
+                box.innerHTML = '<strong>Validação OK.</strong> Malha pronta para enviar ao solver.';
+                return;
+            }
+
+            box.className = `validation-box ${report.errors.length ? 'error' : 'warn'}`;
+            box.innerHTML = `
+                <strong>${report.errors.length ? 'Corrija a malha antes de simular.' : 'Atenção antes de simular.'}</strong>
+                <ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>
+            `;
+        }
 
         function log(msg) { 
             const el = document.getElementById('console-log');
@@ -111,12 +202,17 @@
             btn.innerHTML = "⏳ Processando...";
             successDiv.style.display = 'none';
             document.getElementById('console-log').innerText = "Iniciando processo...";
+            setSolverState('running', 'preparando dados da malha...');
 
             try {
                 log("Lendo banco de dados...");
                 const raw = localStorage.getItem('malha_db_v2');
-                if (!raw) throw new Error("Malha vazia!");
+                if (!raw) throw new Error("Nenhum projeto salvo no navegador. Abra o Editor P&ID, monte a malha e salve antes de simular.");
                 const data = JSON.parse(raw);
+                const validation = validateSimulationData(data);
+                showValidationReport(validation);
+                validation.warnings.forEach(warning => log(`⚠️ ${warning}`));
+                if (!validation.valid) throw new Error(validation.errors.join(' '));
 
                 const propsMap = new Map();
                 if (data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
@@ -140,7 +236,8 @@
                 const dutos_in = [];
                 const dutos_view = [];
                 
-                data.ducts.forEach(d => {
+                const ducts = data.ducts || [];
+                ducts.forEach(d => {
                     const segs = (data.duct_geom || []).filter(g => String(g.duct_id) === String(d.id));
                     segs.sort((a,b) => (a.seg_index||0) - (b.seg_index||0));
                     
@@ -182,7 +279,7 @@
                     return vec;
                 });
 
-                const ci_rows = geometria_in.length + data.ducts.length;
+                const ci_rows = geometria_in.length + ducts.length;
                 const cond_inic_in = Array.from({length: ci_rows}, () => {
                     const r = new Array(17).fill(0);
                     r[0] = 5e6; r[1] = 300; r[2] = 1;
@@ -198,9 +295,12 @@
 
                 log(`Dados preparados: ${dutos_in.length} dutos, ${geometria_in.length} trechos.`);
 
+                setSolverState('running', 'carregando e executando solver WASM...');
+                log("Carregando Solver WASM...");
+                await waitForSolverWrapper();
                 log("Chamando Solver WASM...");
-                const tStart = performance.now(); 
-                
+                const tStart = performance.now();
+
                 const res = await window.runFluxoLib(GLOBAL_BUILT_DATA, 'Fluxo_TS_WASM');
                 
                 const tEnd = performance.now(); 
@@ -209,25 +309,36 @@
                 if(res.ret === 0) {
                     log(`✅ Convergência OK em ${duration}ms. Salvando resultados...`);
                     
-                    localStorage.setItem('last_sim_report', JSON.stringify({
-                        results: res.cond_inic_in, 
+                    const report = {
+                        status: 'converged',
+                        solver: 'Fluxo_TS_WASM',
+                        solver_return: res.ret,
+                        duration_ms: Number(duration),
+                        created_at: new Date().toISOString(),
+                        numeric_params: GLOBAL_BUILT_DATA.numerico,
+                        project_summary: validation.counts,
+                        results: res.cond_inic_in,
                         geometria: GLOBAL_BUILT_DATA.geometria_in,
                         dutos: GLOBAL_BUILT_DATA.dutos_in,
                         dutos_view: GLOBAL_BUILT_DATA.dutos_view
-                    }));
+                    };
+                    localStorage.setItem('last_sim_report', JSON.stringify(report));
 
                     successDiv.innerHTML = `
                         ✅ SUCESSO! Convergência em <b>${duration} ms</b> (Código 0).<br>
                         <span style="font-weight:normal; font-size:12px">Os dados foram salvos. Vá para a aba <b>Relatórios</b> para ver os gráficos.</span>
                     `;
                     successDiv.style.display = 'block';
+                    setSolverState('ready', `convergiu em ${duration} ms; relatório salvo.`);
                 } else {
+                    setSolverState('error', `solver retornou código ${res.ret}.`);
                     log(`❌ Erro: Motor retornou código ${res.ret} após ${duration}ms`);
-                    alert(`Erro na simulação (Código ${res.ret}).`);
+                    alert(`Erro na simulação (Código ${res.ret}). Verifique os parâmetros e a malha.`);
                 }
 
             } catch (e) {
-                log("Erro Crítico: " + e.message);
+                setSolverState('error', e.message);
+                log("Erro: " + e.message);
                 console.error(e);
             } finally {
                 btn.disabled = false;
@@ -236,6 +347,7 @@
             }
         }
     </script>
+    <script src="../static/js/project-summary.js" defer></script>
     <script src="../static/js/pwa.js" defer></script>
 </body>
 </html>

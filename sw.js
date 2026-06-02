@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rotavaflow-static-v2';
+const CACHE_NAME = 'rotavaflow-static-v3';
 const APP_SHELL = [
     './',
     './index.html',
@@ -11,6 +11,7 @@ const APP_SHELL = [
     './pages/help.html',
     './static/manifest.json',
     './static/js/pwa.js',
+    './static/js/project-summary.js',
     './static/js/fabric.min.js',
     './static/js/chart.js',
     './static/js/wrapper.js',
