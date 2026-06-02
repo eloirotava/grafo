@@ -1,31 +1,17 @@
 # 🌊 RotavaFlow
 
-**RotavaFlow** é uma aplicação web estática/offline-first para edição P&ID e simulação de escoamento no navegador. Neste momento, o projeto **não precisa de backend Rust**: as telas são HTML, o estado do projeto fica no browser/arquivo `.rfm`, e o cálculo é carregado pelo módulo WASM em `static/wasm`.
+**RotavaFlow** é uma aplicação web offline-first para desenhar malhas P&ID, configurar propriedades de nós/dutos/equipamentos e executar simulações de escoamento diretamente no navegador com WebAssembly.
 
-## Resposta curta: para que servia o Rust?
+## ✨ Principais recursos
 
-O Rust que existia aqui fazia basicamente duas coisas:
+- **Editor P&ID visual:** monte a malha arrastando nós, equipamentos, válvulas e dutos no canvas.
+- **Configuração física:** edite propriedades dos nós, geometria dos dutos, composições e parâmetros de equipamentos.
+- **Simulação no navegador:** carregamento do solver WASM em `static/wasm` pela tela de Simulação.
+- **Relatórios:** visualização dos resultados salvos da última simulação em gráficos e tabelas.
+- **Projetos portáveis:** salve e carregue arquivos `.rfm` para continuar o trabalho em outra máquina.
+- **PWA/offline:** o Service Worker mantém as páginas, bibliotecas e o solver em cache para uso sem internet depois do primeiro acesso.
 
-1. Servia HTML/templates e arquivos estáticos.
-2. Criava endpoints experimentais de API em memória.
-
-Como o app já possui `index.html`, páginas em `pages/`, assets em `static/` e WASM client-side, essa camada não era necessária para o uso atual. Um servidor de arquivos simples já resolve.
-
-## Estrutura atual
-
-```text
-.
-├── index.html              # Tela inicial
-├── pages/                  # Telas estáticas do app
-├── static/
-│   ├── js/                 # Bibliotecas e wrapper do WASM
-│   ├── manifest.json       # Manifesto PWA
-│   └── wasm/               # Solver WASM/JS
-├── sw.js                   # Service Worker na raiz para controlar o app todo
-└── *.rfm                   # Exemplos/arquivos de malha
-```
-
-## Como rodar localmente
+## 🚀 Como rodar localmente
 
 Use qualquer servidor estático apontando para a raiz do repositório:
 
@@ -35,43 +21,67 @@ python3 -m http.server 8000
 
 Depois abra:
 
+- <http://127.0.0.1:8000/>
 - <http://127.0.0.1:8000/index.html>
-- ou simplesmente <http://127.0.0.1:8000/>
 
-Também funciona com Nginx, Caddy, Apache, `serve`, GitHub Pages ou qualquer hospedagem estática. Evite abrir direto via `file://`, porque Service Worker e WASM funcionam de forma mais previsível via HTTP.
+> Dica: prefira rodar via HTTP local em vez de abrir o arquivo direto via `file://`, porque Service Worker e WASM funcionam de forma mais previsível em um servidor.
 
-## O que foi removido
+## 🧭 Fluxo recomendado de uso
 
-- `Cargo.toml` e `Cargo.lock`.
-- `src/main.rs`.
-- `templates/` Askama.
-- Roadmap/API experimental que dependia do servidor Rust.
-- `static/sw.js`, porque Service Worker precisa ficar na raiz (`sw.js`) para controlar todo o app.
+1. Acesse **Editor P&ID** e monte a malha no canvas.
+2. Dê duplo clique nos elementos ou navegue pelas abas **Nós**, **Tubos** e **Equipamentos** para preencher os parâmetros físicos.
+3. Salve o projeto como `.rfm` sempre que quiser guardar uma versão da malha.
+4. Abra **Simulação**, confira as opções numéricas e rode o solver.
+5. Vá para **Relatórios** para revisar os resultados da última simulação.
 
-## O que ainda foi ajustado
+## 📁 Estrutura do projeto
 
-- Registro do PWA centralizado em `static/js/pwa.js`, em vez de copiar o mesmo script em cada página.
-- Cache offline atualizado para estratégia stale-while-revalidate: abre rápido pelo cache e atualiza em segundo plano quando houver rede.
-- O editor P&ID deixou de tentar carregar `static/js/fluxo.js`, arquivo que não existe; a execução WASM fica na tela de simulação via `static/js/wrapper.js`.
+```text
+.
+├── index.html              # Tela inicial
+├── pages/                  # Telas do editor, configuração, simulação e relatórios
+├── static/
+│   ├── js/                 # Bibliotecas, PWA helper e wrapper do solver
+│   ├── manifest.json       # Manifesto PWA
+│   └── wasm/               # Solver WebAssembly e loader gerado
+├── sw.js                   # Service Worker da aplicação
+└── *.rfm                   # Exemplos/arquivos de malha
+```
 
-## Por que `sw.js` fica na raiz?
+## 📦 Arquivos importantes
 
-Service Workers só controlam páginas dentro do próprio escopo. Colocando `sw.js` na raiz, ele consegue cachear e atender offline:
+| Caminho | Função |
+| --- | --- |
+| `index.html` | Página inicial e ponto de entrada do app. |
+| `pages/canvas.html` | Editor visual da malha P&ID. |
+| `pages/nodes.html` | Configuração dos nós. |
+| `pages/ducts.html` | Configuração dos dutos/tubos. |
+| `pages/equipments.html` | Configuração de equipamentos e válvulas. |
+| `pages/simulation.html` | Montagem dos dados e chamada do solver WASM. |
+| `pages/reports.html` | Leitura do último relatório salvo no navegador. |
+| `static/js/wrapper.js` | Ponte JavaScript para chamar as funções exportadas pelo WASM. |
+| `static/js/pwa.js` | Registro centralizado do Service Worker. |
+| `sw.js` | Cache offline das páginas e assets principais. |
 
-- `index.html`
-- `pages/*.html`
-- `static/js/*`
-- `static/wasm/*`
-- `static/manifest.json`
+## 📴 Uso offline
 
-## Quando faria sentido trazer Rust de volta?
+No primeiro acesso via servidor HTTP, o navegador instala o PWA e armazena o app shell em cache. Depois disso, o RotavaFlow consegue abrir as telas principais e carregar o solver mesmo sem rede.
 
-Rust voltaria a fazer sentido se você quiser:
+Se alguma alteração não aparecer durante desenvolvimento, limpe o cache do navegador ou recarregue ignorando cache. O cache atual usa a chave `rotavaflow-static-v2`.
 
-- salvar projetos em banco/arquivo no servidor;
-- autenticação e múltiplos usuários;
-- filas de simulação pesadas no backend;
-- relatórios persistidos;
-- executar um solver nativo no servidor em vez de WASM no browser.
+## 🧪 Checklist rápido para desenvolvimento
 
-Enquanto a proposta for “abrir a interface, editar malha, salvar `.rfm` e rodar WASM no navegador”, estático é mais simples e mais fácil de manter.
+```bash
+python3 -m json.tool static/manifest.json
+node --check static/js/pwa.js
+node --check sw.js
+node --check static/js/wrapper.js
+python3 -m http.server 8000
+```
+
+Com o servidor rodando, confira pelo navegador:
+
+- `/` abre a home.
+- `/pages/canvas.html` abre o editor.
+- `/pages/simulation.html` carrega a tela de simulação.
+- `/static/wasm/fluxo.wasm` responde pelo servidor.
