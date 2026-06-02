@@ -1,106 +1,71 @@
 # 🌊 RotavaFlow
 
-**RotavaFlow** é um servidor Rust + PWA para modelagem visual e simulação de escoamento em malhas com nós, tubos, equipamentos e condições de contorno. A aplicação entrega telas HTML via Askama, assets estáticos embutidos no binário e um módulo WASM para evolução do solver no navegador.
+**RotavaFlow** é uma aplicação web estática/offline-first para edição P&ID e simulação de escoamento no navegador. Neste momento, o projeto **não precisa de backend Rust**: as telas são HTML, o estado do projeto fica no browser/arquivo `.rfm`, e o cálculo é carregado pelo módulo WASM em `static/wasm`.
 
-## ✨ O que já vem pronto
+## Resposta curta: para que servia o Rust?
 
-- 🧭 Interface web offline-first com Service Worker e manifesto PWA.
-- 🧩 Templates para editor P&ID, nós, tubos, equipamentos, simulação e relatórios.
-- 📦 Assets embutidos no executável com `rust-embed`.
-- 🩺 Endpoint `/health` para diagnóstico do serviço.
-- 📊 Endpoint `/metrics` com contadores operacionais simples.
-- 🗂️ API em memória para criar, listar, carregar, atualizar e validar projetos.
-- ⚙️ API de simulação com histórico de estados `queued`, `running`, `completed` e `failed`.
+O Rust que existia aqui fazia basicamente duas coisas:
 
-## 🚀 Como rodar
+1. Servia HTML/templates e arquivos estáticos.
+2. Criava endpoints experimentais de API em memória.
 
-```bash
-cargo run
+Como o app já possui `index.html`, páginas em `pages/`, assets em `static/` e WASM client-side, essa camada não era necessária para o uso atual. Um servidor de arquivos simples já resolve.
+
+## Estrutura atual
+
+```text
+.
+├── index.html              # Tela inicial
+├── pages/                  # Telas estáticas do app
+├── static/
+│   ├── js/                 # Bibliotecas e wrapper do WASM
+│   ├── manifest.json       # Manifesto PWA
+│   └── wasm/               # Solver WASM/JS
+├── sw.js                   # Service Worker na raiz para controlar o app todo
+└── *.rfm                   # Exemplos/arquivos de malha
 ```
 
-Depois acesse:
+## Como rodar localmente
 
-- App: <http://127.0.0.1:8000>
-- Saúde: <http://127.0.0.1:8000/health>
-- Métricas: <http://127.0.0.1:8000/metrics>
-
-## 🧪 Testes rápidos
+Use qualquer servidor estático apontando para a raiz do repositório:
 
 ```bash
-cargo test
+python3 -m http.server 8000
 ```
 
-Criar um projeto de exemplo:
+Depois abra:
 
-```bash
-curl -fsS http://127.0.0.1:8000/api/projects \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "Malha demo",
-    "nodes": [
-      {"id": "n1", "label": "Entrada", "x": 0, "y": 0},
-      {"id": "n2", "label": "Saída", "x": 200, "y": 0}
-    ],
-    "ducts": [
-      {"id": "t1", "from": "n1", "to": "n2", "length_m": 12.5, "diameter_m": 0.2, "roughness_m": 0.0001}
-    ],
-    "equipments": [
-      {"id": "b1", "kind": "pump", "node_id": "n1", "pressure_delta_pa": 150000}
-    ],
-    "boundary_conditions": [
-      {"node_id": "n1", "kind": "pressure", "value": 101325, "unit": "Pa"},
-      {"node_id": "n2", "kind": "flow", "value": 0.2, "unit": "m3/s"}
-    ]
-  }'
-```
+- <http://127.0.0.1:8000/index.html>
+- ou simplesmente <http://127.0.0.1:8000/>
 
-Rodar uma simulação usando o projeto salvo:
+Também funciona com Nginx, Caddy, Apache, `serve`, GitHub Pages ou qualquer hospedagem estática.
 
-```bash
-curl -fsS http://127.0.0.1:8000/api/simulations \
-  -H 'Content-Type: application/json' \
-  -d '{"project_id":"proj-1"}'
-```
+## O que foi removido
 
-## 🧱 Formato do projeto
+- `Cargo.toml` e `Cargo.lock`.
+- `src/main.rs`.
+- `templates/` Askama.
+- Roadmap/API experimental que dependia do servidor Rust.
+- `static/sw.js`, porque Service Worker precisa ficar na raiz (`sw.js`) para controlar todo o app.
 
-O schema atual é `1.0` e modela:
+## Por que `sw.js` fica na raiz?
 
-| Campo | Descrição |
-| --- | --- |
-| `name` | Nome humano do projeto. |
-| `schema_version` | Versão do contrato JSON; assume `1.0` quando omitido. |
-| `nodes` | Pontos da malha hidráulica. |
-| `ducts` | Tubos conectando nós, com comprimento, diâmetro e rugosidade. |
-| `equipments` | Bombas, válvulas ou outros componentes presos a nós. |
-| `boundary_conditions` | Pressão, vazão ou outras condições aplicadas aos nós. |
+Service Workers só controlam páginas dentro do próprio escopo. Colocando `sw.js` na raiz, ele consegue cachear e atender offline:
 
-## 🔌 Endpoints principais
+- `index.html`
+- `pages/*.html`
+- `static/js/*`
+- `static/wasm/*`
+- `static/manifest.json`
 
-| Método | Rota | Uso |
-| --- | --- | --- |
-| `GET` | `/health` | Confirma status, versão e módulos do servidor. |
-| `GET` | `/metrics` | Retorna uptime e contadores de projetos/simulações. |
-| `GET` | `/api/projects` | Lista projetos salvos em memória. |
-| `POST` | `/api/projects` | Cria um projeto após validação estrutural. |
-| `GET` | `/api/projects/:id` | Carrega um projeto salvo. |
-| `PUT` | `/api/projects/:id` | Atualiza ou cria um projeto com ID definido. |
-| `POST` | `/api/projects/:id/validate` | Revalida um projeto salvo. |
-| `POST` | `/api/simulations` | Executa uma simulação simplificada por `project_id` ou `project` inline. |
-| `GET` | `/api/simulations/:id` | Recupera o relatório de uma simulação. |
+## Quando faria sentido trazer Rust de volta?
 
-## 🛣️ Próximos passos sugeridos
+Rust voltaria a fazer sentido se você quiser:
 
-1. Persistir projetos em arquivo ou banco local em vez de manter apenas em memória.
-2. Conectar `/api/simulations` ao solver WASM/nativo real.
-3. Adicionar autenticação opcional quando o servidor sair do uso local.
-4. Expor métricas em formato Prometheus, se houver implantação em cluster.
-5. Criar testes de contrato para impedir regressões no schema JSON.
+- salvar projetos em banco/arquivo no servidor;
+- autenticação e múltiplos usuários;
+- filas de simulação pesadas no backend;
+- relatórios persistidos;
+- executar um solver nativo no servidor em vez de WASM no browser.
 
-## 🧰 Stack
-
-- Rust 2021
-- Axum + Tokio
-- Askama
-- Rust Embed
-- Serde
+Enquanto a proposta for “abrir a interface, editar malha, salvar `.rfm` e rodar WASM no navegador”, estático é mais simples e mais fácil de manter.

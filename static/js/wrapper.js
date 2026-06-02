@@ -6,11 +6,11 @@ let _fnDt = null;
 
 export async function initFluxoWasm() {
     if (_mod) return _mod;
-    const dynamicImport = new Function('path', 'return import(path)');
-    const fluxoUrl = '../wasm/fluxo.js';
-    const ModuleFactory = (await dynamicImport(fluxoUrl)).default;
+    const fluxoUrl = new URL('../wasm/fluxo.js', import.meta.url).href;
+    const wasmUrl = new URL('../wasm/fluxo.wasm', import.meta.url).href;
+    const ModuleFactory = (await import(fluxoUrl)).default;
     _mod = await ModuleFactory({
-        locateFile: (path) => path.endsWith('.wasm') ? '../static/wasm/fluxo.wasm' : path
+        locateFile: (path) => path.endsWith('.wasm') ? wasmUrl : path
     });
     _fnFluxo = _mod.cwrap('Fluxo_TS_WASM', 'number', Array(13).fill('number'));
     _fnDt = _mod.cwrap('dt_2024_01_WASM', 'number', Array(13).fill('number'));
