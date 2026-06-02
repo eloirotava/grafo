@@ -7,6 +7,7 @@ edition = "2021"
 # Web Framework
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
 
 # Template Engine
 askama = "0.12"
