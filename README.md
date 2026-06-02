@@ -65,13 +65,13 @@ Depois abra:
 
 ## 🗺️ Roadmap
 
-As próximas melhorias planejadas estão em [`docs/roadmap.md`](docs/roadmap.md), incluindo validação da malha, documentação do `.rfm`, relatórios melhores e acabamento PWA.
+As próximas melhorias planejadas estão em [`docs/roadmap.md`](docs/roadmap.md). O formato dos projetos `.rfm` está documentado em [`docs/rfm-format.md`](docs/rfm-format.md).
 
 ## 📴 Uso offline
 
 No primeiro acesso via servidor HTTP, o navegador instala o PWA e armazena o app shell em cache. Depois disso, o RotavaFlow consegue abrir as telas principais e carregar o solver mesmo sem rede.
 
-Se alguma alteração não aparecer durante desenvolvimento, limpe o cache do navegador ou recarregue ignorando cache. O cache atual usa a chave `rotavaflow-static-v3`.
+Se alguma alteração não aparecer durante desenvolvimento, limpe o cache do navegador ou recarregue ignorando cache. O cache atual usa a chave `rotavaflow-static-v4`.
 
 ## 🧪 Checklist rápido para desenvolvimento
 

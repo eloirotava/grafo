@@ -64,6 +64,7 @@
                 <div class="palette-group">
                     <div class="group-title">Arquivo</div>
                     <button class="action-btn" onclick="exportJSON()">💾 Salvar Malha</button>
+                    <button class="action-btn" onclick="exportReadableJSON()">{} Exportar JSON</button>
                     <label class="action-btn">
                         📂 Abrir Malha
                         <input type="file" onchange="importJSON(event)" accept=".rfm" style="display: none;">
@@ -99,6 +100,7 @@
         </div>
     </div>
 
+    <script src="../static/js/rfm-utils.js" defer></script>
     <script src="../static/js/pwa.js" defer></script>
 
     <script>
@@ -411,13 +413,19 @@
                     d.geometry.forEach(g => duct_geom.push({ duct_id: d.id, seg_index: g.seg_index, L: g.L !== undefined ? g.L : g.length, dy: g.dy || 0, D: g.D !== undefined ? g.D : g.diameter, rug: g.rug !== undefined ? g.rug : g.roughness, U: g.U || 0, aco: g.aco || "0", Tamb: g.Tamb || 298 }));
                 }
             });
-            return { nodes, ducts, valves, duct_geom, node_props, node_composition, version: "2.1", timestamp: Date.now() };
+            return RotavaFlowRfm.ensureSchemaVersion({ nodes, ducts, valves, duct_geom, node_props, node_composition, version: "2.1", timestamp: Date.now(), updated_at: new Date().toISOString() });
         }
 
         async function exportJSON() {
             setStatus("Preparando exportação...");
             try {
                 const data = getModel();
+                const validation = RotavaFlowRfm.validateProject(data);
+                if (!validation.valid) {
+                    alert(`Corrija a malha antes de salvar:\n\n${validation.errors.join('\n')}`);
+                    return;
+                }
+                if (validation.warnings.length && !confirm(`A malha tem avisos:\n\n${validation.warnings.join('\n')}\n\nSalvar mesmo assim?`)) return;
                 const jsonStr = JSON.stringify(data, null, 2);
                 const defaultName = `projeto_malha.rfm`;
 
@@ -444,6 +452,23 @@
             } catch (err) { alert("Erro ao salvar: " + err.message); }
         }
 
+        window.exportReadableJSON = function() {
+            const data = getModel();
+            const validation = RotavaFlowRfm.validateProject(data);
+            if (!validation.valid) {
+                alert(`Corrija a malha antes de exportar:\n\n${validation.errors.join('\n')}`);
+                return;
+            }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'projeto_malha.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            setStatus('JSON legível exportado.');
+        };
+
         async function importJSON(e) {
             const file = e.target.files[0]; if(!file) return;
             try {
@@ -455,7 +480,7 @@
                     } catch (decompErr) { jsonStr = await file.text(); }
                 } else { jsonStr = await file.text(); }
 
-                const data = JSON.parse(jsonStr); const mergedData = adaptToNative(data); reconstruct(mergedData); saveState(); setStatus("Projeto carregado com sucesso!");
+                const data = RotavaFlowRfm.ensureSchemaVersion(JSON.parse(jsonStr)); const mergedData = adaptToNative(data); reconstruct(mergedData); saveState(); setStatus("Projeto carregado com sucesso!");
             } catch(err) { setStatus("Erro crítico ao abrir arquivo."); alert("Arquivo inválido ou corrompido."); }
             e.target.value = ''; 
         }

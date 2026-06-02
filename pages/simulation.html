@@ -72,7 +72,7 @@
                 <div class="form-group">
                     <label>Regime</label>
                     <select id="sim-mode" onchange="toggleTimeInput()">
-                        <option value="steady">Permanente (1e90)</option>
+                        <option value="steady">Permanente</option>
                         <option value="transient">Transiente</option>
                     </select>
                 </div>
@@ -123,35 +123,17 @@
         }
 
         function validateSimulationData(data) {
-            const errors = [];
-            const warnings = [];
+            const baseReport = window.RotavaFlowRfm
+                ? RotavaFlowRfm.validateProject(data)
+                : { errors: [], warnings: [] };
             const nodes = (data.nodes || []).filter(n => n.type !== 'valve' && n.type !== 'A');
             const ducts = data.ducts || [];
-            const nodeIds = new Set(nodes.map(n => String(n.id)));
-
-            if (nodes.length < 2) errors.push('Crie pelo menos dois nós para simular uma malha.');
-            if (ducts.length < 1) errors.push('Crie pelo menos um duto conectado entre nós.');
-
-            ducts.forEach(d => {
-                if (!d.start_id || !d.end_id) errors.push(`Duto ${d.name || d.id} precisa estar conectado nas duas pontas.`);
-                if (d.start_id && !nodeIds.has(String(d.start_id))) errors.push(`Duto ${d.name || d.id} referencia nó inicial inexistente.`);
-                if (d.end_id && !nodeIds.has(String(d.end_id))) errors.push(`Duto ${d.name || d.id} referencia nó final inexistente.`);
-                const segs = (data.duct_geom || []).filter(g => String(g.duct_id) === String(d.id));
-                if (segs.length === 0) warnings.push(`Duto ${d.name || d.id} não tem geometria detalhada; serão usados valores padrão.`);
-                segs.forEach(seg => {
-                    const length = parseFloat(seg.L || seg.length || 0);
-                    const diameter = parseFloat(seg.D || seg.diameter || 0);
-                    if (length <= 0) errors.push(`Tramo ${seg.seg_index ?? '?'} do duto ${d.name || d.id} precisa de comprimento positivo.`);
-                    if (diameter <= 0) errors.push(`Tramo ${seg.seg_index ?? '?'} do duto ${d.name || d.id} precisa de diâmetro positivo.`);
-                });
-            });
-
-            nodes.forEach(n => {
-                const comps = (data.node_composition || []).filter(c => String(c.node_id) === String(n.id));
-                if (comps.length === 0) warnings.push(`Nó ${n.name || n.id} sem composição definida; composição inicial pode ficar zerada.`);
-            });
-
-            return { valid: errors.length === 0, errors, warnings, counts: { nodes: nodes.length, ducts: ducts.length } };
+            return {
+                valid: baseReport.errors.length === 0,
+                errors: baseReport.errors,
+                warnings: baseReport.warnings,
+                counts: { nodes: nodes.length, ducts: ducts.length }
+            };
         }
 
         function showValidationReport(report) {
@@ -347,6 +329,7 @@
             }
         }
     </script>
+    <script src="../static/js/rfm-utils.js" defer></script>
     <script src="../static/js/project-summary.js" defer></script>
     <script src="../static/js/pwa.js" defer></script>
 </body>

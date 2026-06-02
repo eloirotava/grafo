@@ -9,12 +9,12 @@ Este documento registra o que ainda vale fazer no RotavaFlow como aplicação we
 - Adicionar avisos visuais quando não houver projeto salvo no navegador ou quando a malha estiver incompleta. **Feito: resumo/aviso de projeto nas telas principais.**
 - Exibir um resumo do projeto atual no topo das páginas de configuração: quantidade de nós, dutos, válvulas/equipamentos e última alteração. **Parcial: contadores principais adicionados.**
 
-## 2. Dados e arquivo `.rfm`
+## 2. Dados e arquivo `.rfm` — iniciado
 
-- Documentar o formato do `.rfm` com campos esperados para nós, dutos, geometria, composição, equipamentos e resultados.
-- Criar validação antes de salvar/simular para detectar referências quebradas, dutos sem ponta conectada, diâmetro inválido, composição incompleta e unidades ausentes.
-- Incluir `schema_version` no arquivo salvo para permitir migrações futuras sem quebrar projetos antigos.
-- Adicionar um botão de exportação legível em JSON além do `.rfm` comprimido, útil para depuração.
+- Documentar o formato do `.rfm` com campos esperados para nós, dutos, geometria, composição, equipamentos e resultados. **Feito: `docs/rfm-format.md`.**
+- Criar validação antes de salvar/simular para detectar referências quebradas, dutos sem ponta conectada, diâmetro inválido, composição incompleta e unidades ausentes. **Parcial: validação compartilhada para salvar e simular adicionada.**
+- Incluir `schema_version` no arquivo salvo para permitir migrações futuras sem quebrar projetos antigos. **Feito: schema atual `1.0`.**
+- Adicionar um botão de exportação legível em JSON além do `.rfm` comprimido, útil para depuração. **Feito no Editor P&ID.**
 
 ## 3. Simulação WASM — iniciado
 
