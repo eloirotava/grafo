@@ -38,7 +38,7 @@ Depois abra:
 - <http://127.0.0.1:8000/index.html>
 - ou simplesmente <http://127.0.0.1:8000/>
 
-Também funciona com Nginx, Caddy, Apache, `serve`, GitHub Pages ou qualquer hospedagem estática.
+Também funciona com Nginx, Caddy, Apache, `serve`, GitHub Pages ou qualquer hospedagem estática. Evite abrir direto via `file://`, porque Service Worker e WASM funcionam de forma mais previsível via HTTP.
 
 ## O que foi removido
 
@@ -47,6 +47,12 @@ Também funciona com Nginx, Caddy, Apache, `serve`, GitHub Pages ou qualquer hos
 - `templates/` Askama.
 - Roadmap/API experimental que dependia do servidor Rust.
 - `static/sw.js`, porque Service Worker precisa ficar na raiz (`sw.js`) para controlar todo o app.
+
+## O que ainda foi ajustado
+
+- Registro do PWA centralizado em `static/js/pwa.js`, em vez de copiar o mesmo script em cada página.
+- Cache offline atualizado para estratégia stale-while-revalidate: abre rápido pelo cache e atualiza em segundo plano quando houver rede.
+- O editor P&ID deixou de tentar carregar `static/js/fluxo.js`, arquivo que não existe; a execução WASM fica na tela de simulação via `static/js/wrapper.js`.
 
 ## Por que `sw.js` fica na raiz?
 

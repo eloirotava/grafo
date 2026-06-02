@@ -78,11 +78,6 @@
         </div>
     </div>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
-        }
-    </script>
 
     <script>
         let globalData = {};
@@ -243,5 +238,6 @@
 
         init();
     </script>
+    <script src="../static/js/pwa.js" defer></script>
 </body>
 </html>

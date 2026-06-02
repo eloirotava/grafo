@@ -70,11 +70,6 @@
         </div>
     </div>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
-        }
-    </script>
 
     <script>
         const SPECIES = ['N2','CO2','C1','C2','iC3','nC3','iC4','nC4','C5','C6','C7','C8','C9','C10+'];
@@ -175,5 +170,6 @@
 
         init();
     </script>
+    <script src="../static/js/pwa.js" defer></script>
 </body>
 </html>

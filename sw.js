@@ -1,5 +1,5 @@
-const CACHE_NAME = 'rotavaflow-static-v1';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'rotavaflow-static-v2';
+const APP_SHELL = [
     './',
     './index.html',
     './pages/canvas.html',
@@ -10,6 +10,7 @@ const ASSETS_TO_CACHE = [
     './pages/reports.html',
     './pages/help.html',
     './static/manifest.json',
+    './static/js/pwa.js',
     './static/js/fabric.min.js',
     './static/js/chart.js',
     './static/js/wrapper.js',
@@ -19,9 +20,7 @@ const ASSETS_TO_CACHE = [
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
-    );
+    event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
 });
 
 self.addEventListener('activate', (event) => {
@@ -36,17 +35,30 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
-    event.respondWith(
-        caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-
-            return fetch(event.request).then((response) => {
-                if (response.ok) {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-                }
-                return response;
-            });
-        })
-    );
+    event.respondWith(staleWhileRevalidate(event.request));
 });
+
+async function staleWhileRevalidate(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+
+    const fetched = fetch(request)
+        .then((response) => {
+            if (response.ok) cache.put(request, response.clone());
+            return response;
+        })
+        .catch(() => cached || fallbackResponse(request));
+
+    return cached || fetched;
+}
+
+function fallbackResponse(request) {
+    if (request.mode === 'navigate') {
+        return caches.match('./index.html');
+    }
+
+    return new Response('Offline e sem cache.', {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
+}

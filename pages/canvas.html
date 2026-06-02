@@ -99,18 +99,7 @@
         </div>
     </div>
 
-    <script>
-        // O Service Worker deve ser registado a partir da raiz
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('../sw.js')
-                    .then(reg => console.log('✅ Modo Offline Ativado! Scope:', reg.scope))
-                    .catch(err => console.log('❌ Falha no Service Worker:', err));
-            });
-        }
-    </script>
-
-    <script src="../static/js/fluxo.js"></script>
+    <script src="../static/js/pwa.js" defer></script>
 
     <script>
         const canvas = new fabric.Canvas('c', { selection: true, preserveObjectStacking: true, backgroundColor: '#ffffff' });
@@ -120,19 +109,6 @@
         const SNAP_DISTANCE = 60; 
         const STORAGE_KEY = 'malha_db_v2';
 
-        // Inicializa Wasm: O Emscripten precisa saber o novo caminho relativo
-        var Module = {
-            onRuntimeInitialized: function() {
-                if (window.onSolverReady) window.onSolverReady(Module);
-                setStatus("Motor de Simulação Pronto (WASM).");
-            },
-            locateFile: function(path) {
-                if(path.endsWith('.wasm')) {
-                    return '../static/wasm/' + path;
-                }
-                return path;
-            }
-        };
 
         function setStatus(m) { 
             const el = document.getElementById('status-msg');
