@@ -5,7 +5,7 @@ Este documento registra o que ainda vale fazer no RotavaFlow como aplicação we
 ## 1. Conteúdo e experiência do usuário — iniciado
 
 - Padronizar textos das telas para usar os mesmos nomes: **nós**, **tubos/dutos**, **equipamentos**, **simulação** e **relatórios**.
-- Melhorar a página de Ajuda com exemplos curtos de um projeto completo: criar dois nós, conectar um duto, configurar propriedades e rodar a simulação. **Feito: exemplo rápido adicionado.**
+- Melhorar a página de Ajuda com exemplos curtos de um projeto completo: criar dois nós, conectar um duto, configurar propriedades e rodar a simulação. **Feito: ajuda reescrita com fluxo, checklist e erros comuns.**
 - Adicionar avisos visuais quando não houver projeto salvo no navegador ou quando a malha estiver incompleta. **Feito: resumo/aviso de projeto nas telas principais.**
 - Exibir um resumo do projeto atual no topo das páginas de configuração: quantidade de nós, dutos, válvulas/equipamentos e última alteração. **Parcial: contadores principais adicionados.**
 
