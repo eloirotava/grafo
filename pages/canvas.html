@@ -44,6 +44,15 @@
         .canvas-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; outline: none; }
         canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         .statusbar { position: absolute; bottom: 0; left: 0; right: 0; height: 22px; background-color: #007acc; color: white; display: flex; align-items: center; padding: 0 10px; font-size: 11px; pointer-events: none; z-index: 999; }
+
+        /* Colaboração */
+        .collab-field { width: 120px; margin: 0 auto 8px auto; text-align: left; }
+        .collab-field label { display: block; font-size: 10px; color: #aaa; margin-bottom: 3px; }
+        .collab-field input { width: 100%; box-sizing: border-box; background: #1e1e1e; color: #eee; border: 1px solid #3e3e42; border-radius: 3px; padding: 6px; font-size: 12px; }
+        .collab-status { width: 120px; margin: 0 auto; font-size: 10px; color: #aaa; word-break: break-word; }
+        .remote-cursor { position: absolute; pointer-events: none; z-index: 1000; transform: translate(2px, 2px); transition: left 0.05s linear, top 0.05s linear; }
+        .remote-cursor .cursor-pointer { color: var(--cursor-color, #f1c40f); font-size: 18px; line-height: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
+        .remote-cursor .cursor-label { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 999px; background: var(--cursor-color, #f1c40f); color: #111; font-size: 11px; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
     </style>
 </head>
 <body>
@@ -72,6 +81,20 @@
                 </div>
 
                 <div class="palette-group">
+                    <div class="group-title">Colaboração</div>
+                    <div class="collab-field">
+                        <label for="collab-name">Nome</label>
+                        <input id="collab-name" maxlength="32" placeholder="Seu nome">
+                    </div>
+                    <div class="collab-field">
+                        <label for="collab-room">Sala</label>
+                        <input id="collab-room" maxlength="32" placeholder="geral">
+                    </div>
+                    <button class="action-btn" onclick="connectCollaboration()">🔌 Entrar</button>
+                    <div class="collab-status" id="collab-status">Offline</div>
+                </div>
+
+                <div class="palette-group">
                     <div class="group-title">Acessórios</div>
                     <div class="palette-item" draggable="true" ondragstart="drag(event, 'valve')"><div class="icon-valve"></div><span>In-line</span></div>
                 </div>
@@ -94,6 +117,7 @@
             
             <div class="canvas-area" id="wrap">
                 <canvas id="c"></canvas>
+                <div id="remote-cursors"></div>
                 <div class="statusbar" id="status-msg">Pronto.</div>
             </div>
         </div>
@@ -119,6 +143,15 @@
         const VALVE_CENTER_OFFSET = -7; 
         const SNAP_DISTANCE = 60; 
         const STORAGE_KEY = 'malha_db_v2';
+        const COLLAB_NAME_KEY = 'grafo_collab_name';
+        const COLLAB_ROOM_KEY = 'grafo_collab_room';
+        const CURSOR_COLORS = ['#f1c40f', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c', '#3498db'];
+
+        let collaborationSocket = null;
+        let collaborationConnected = false;
+        let lastCursorSentAt = 0;
+        const remoteCursors = new Map();
+        const clientId = getClientId();
 
         // Inicializa Wasm: O Emscripten precisa saber o novo caminho relativo
         var Module = {
@@ -163,6 +196,129 @@
             else createEq(p.x, p.y, type);
             saveState();
         };
+
+        // --- Colaboração (WebSocket + cursor remoto) ---
+        function getClientId() {
+            if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+            return `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        function getCollaborationIdentity() {
+            const nameEl = document.getElementById('collab-name');
+            const roomEl = document.getElementById('collab-room');
+            const user = (nameEl?.value || '').trim() || 'Visitante';
+            const room = (roomEl?.value || '').trim() || 'geral';
+            localStorage.setItem(COLLAB_NAME_KEY, user);
+            localStorage.setItem(COLLAB_ROOM_KEY, room);
+            return { user, room };
+        }
+
+        function setCollaborationStatus(message, isOnline=false) {
+            const el = document.getElementById('collab-status');
+            if (!el) return;
+            el.innerText = message;
+            el.style.color = isOnline ? '#2ecc71' : '#aaa';
+        }
+
+        window.connectCollaboration = function() {
+            if (location.protocol === 'file:') {
+                setCollaborationStatus('Use http:// para WS');
+                return;
+            }
+
+            const { user, room } = getCollaborationIdentity();
+            if (collaborationSocket) collaborationSocket.close();
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const params = new URLSearchParams({ user, room, client_id: clientId });
+            const url = `${protocol}//${location.host}/ws?${params.toString()}`;
+
+            setCollaborationStatus('Conectando...');
+            collaborationSocket = new WebSocket(url);
+
+            collaborationSocket.addEventListener('open', () => {
+                collaborationConnected = true;
+                setCollaborationStatus(`Online em ${room}`, true);
+                sendCollaboration({ type: 'presence', status: 'online' });
+            });
+
+            collaborationSocket.addEventListener('message', (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'cursor') updateRemoteCursor(msg);
+                } catch (err) {
+                    console.warn('Mensagem colaborativa inválida:', err);
+                }
+            });
+
+            collaborationSocket.addEventListener('close', () => {
+                collaborationConnected = false;
+                setCollaborationStatus('Offline');
+            });
+
+            collaborationSocket.addEventListener('error', () => {
+                collaborationConnected = false;
+                setCollaborationStatus('Erro de conexão');
+            });
+        };
+
+        function sendCollaboration(payload) {
+            if (!collaborationSocket || collaborationSocket.readyState !== WebSocket.OPEN) return;
+            const { user, room } = getCollaborationIdentity();
+            collaborationSocket.send(JSON.stringify({ ...payload, client_id: clientId, user, room, timestamp: Date.now() }));
+        }
+
+        canvas.on('mouse:move', (event) => {
+            if (!collaborationConnected) return;
+            const now = Date.now();
+            if (now - lastCursorSentAt < 50) return;
+            lastCursorSentAt = now;
+
+            const pointer = canvas.getPointer(event.e);
+            sendCollaboration({ type: 'cursor', x: pointer.x, y: pointer.y });
+        });
+
+        function updateRemoteCursor(msg) {
+            if (!msg.client_id || msg.client_id === clientId) return;
+
+            const canvasRect = canvas.upperCanvasEl.getBoundingClientRect();
+            const wrapRect = wrap.getBoundingClientRect();
+            const left = canvasRect.left - wrapRect.left + Number(msg.x || 0);
+            const top = canvasRect.top - wrapRect.top + Number(msg.y || 0);
+
+            let cursor = remoteCursors.get(msg.client_id);
+            if (!cursor) {
+                cursor = document.createElement('div');
+                cursor.className = 'remote-cursor';
+                cursor.style.setProperty('--cursor-color', colorForClient(msg.client_id));
+                cursor.innerHTML = '<span class="cursor-pointer">➤</span><span class="cursor-label"></span>';
+                document.getElementById('remote-cursors').appendChild(cursor);
+                remoteCursors.set(msg.client_id, cursor);
+            }
+
+            cursor.style.left = `${left}px`;
+            cursor.style.top = `${top}px`;
+            cursor.querySelector('.cursor-label').innerText = msg.user || 'Visitante';
+            cursor.style.display = 'block';
+
+            clearTimeout(cursor.hideTimer);
+            cursor.hideTimer = setTimeout(() => { cursor.style.display = 'none'; }, 5000);
+        }
+
+        function colorForClient(id) {
+            let hash = 0;
+            for (const ch of id) hash = ((hash << 5) - hash) + ch.charCodeAt(0);
+            return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+        }
+
+        function initCollaborationForm() {
+            const nameEl = document.getElementById('collab-name');
+            const roomEl = document.getElementById('collab-room');
+            if (nameEl) nameEl.value = localStorage.getItem(COLLAB_NAME_KEY) || '';
+            if (roomEl) roomEl.value = localStorage.getItem(COLLAB_ROOM_KEY) || 'geral';
+        }
+
+        initCollaborationForm();
 
         // --- DOUBLE CLICK NAVIGATION ---
         canvas.on('mouse:dblclick', (e) => {
