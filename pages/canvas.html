@@ -149,6 +149,7 @@
 
         let collaborationSocket = null;
         let collaborationConnected = false;
+        let applyingRemoteCanvasState = false;
         let lastCursorSentAt = 0;
         const remoteCursors = new Map();
         const clientId = getClientId();
@@ -246,6 +247,7 @@
                 try {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'cursor') updateRemoteCursor(msg);
+                    else if (msg.type === 'canvas_state') applyRemoteCanvasState(msg);
                 } catch (err) {
                     console.warn('Mensagem colaborativa inválida:', err);
                 }
@@ -266,6 +268,27 @@
             if (!collaborationSocket || collaborationSocket.readyState !== WebSocket.OPEN) return;
             const { user, room } = getCollaborationIdentity();
             collaborationSocket.send(JSON.stringify({ ...payload, client_id: clientId, user, room, timestamp: Date.now() }));
+        }
+
+        function broadcastCanvasState(data) {
+            if (applyingRemoteCanvasState) return;
+            sendCollaboration({ type: 'canvas_state', data });
+        }
+
+        function applyRemoteCanvasState(msg) {
+            if (!msg.data) return;
+
+            applyingRemoteCanvasState = true;
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(msg.data));
+                reconstruct(adaptToNative(msg.data));
+                setStatus(`Canvas atualizado por ${msg.user || 'outro usuário'}.`);
+            } catch (err) {
+                console.warn('Erro ao aplicar canvas remoto:', err);
+                setStatus('Erro ao aplicar canvas remoto.');
+            } finally {
+                applyingRemoteCanvasState = false;
+            }
         }
 
         canvas.on('mouse:move', (event) => {
@@ -640,8 +663,8 @@
             e.target.value = ''; 
         }
 
-        function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(getModel())); }
-        window.clearAll = function() { if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); } };
+        function saveState() { const data = getModel(); localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); broadcastCanvasState(data); }
+        window.clearAll = function() { if(confirm("Apagar tudo?")) { localStorage.removeItem(STORAGE_KEY); broadcastCanvasState({ nodes: [], ducts: [], valves: [], duct_geom: [], node_props: [], node_composition: [], version: '2.1', timestamp: Date.now() }); location.reload(); } };
 
         function adaptToNative(data) {
             const propsMap = new Map(); if(data.node_props) data.node_props.forEach(p => propsMap.set(String(p.node_id), p));
