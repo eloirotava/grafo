@@ -1,23 +1,17 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>RotavaFlow - Editor P&ID</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#333333">
+    <title>RotavaFlow - Editor P&amp;ID</title>
+    <link rel="icon" href="../static/icon.png" type="image/png">
+    <link rel="stylesheet" href="../static/css/app.css">
     <link rel="manifest" href="../static/manifest.json">
+    <script src="../static/js/app.js" defer></script>
     <script src="../static/js/fabric.min.js"></script>
     <script src="../static/js/chart.js"></script>
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
-        
-        /* Barra de Menu */
-        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
-        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
-        .nav-link:hover { background-color: #444; color: white; }
-        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
-        
-        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
-
         /* Estilos do Editor P&ID */
         .editor-layout { display: flex; flex-grow: 1; height: 100%; overflow: hidden; background: #1e1e1e; font-family: 'Segoe UI', sans-serif; }
         .sidebar { width: 150px; background-color: #252526; color: #ccc; display: flex; flex-direction: column; align-items: center; padding-top: 15px; border-right: 1px solid #3e3e42; overflow-y: auto; user-select: none; }
@@ -49,7 +43,7 @@
 <body>
     <div class="menubar">
         <a href="../index.html" class="nav-link">Início</a>
-        <a href="#" class="nav-link active">Editor P&ID</a>
+        <a href="#" class="nav-link active">Editor P&amp;ID</a>
         <a href="nodes.html" class="nav-link">Nós</a>
         <a href="ducts.html" class="nav-link">Tubos</a>
         <a href="equipments.html" class="nav-link">Equipamentos</a>
@@ -100,19 +94,6 @@
     </div>
 
     <script>
-        // O Service Worker deve ser registado a partir da raiz
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('../sw.js')
-                    .then(reg => console.log('✅ Modo Offline Ativado! Scope:', reg.scope))
-                    .catch(err => console.log('❌ Falha no Service Worker:', err));
-            });
-        }
-    </script>
-
-    <script src="../static/js/fluxo.js"></script>
-
-    <script>
         const canvas = new fabric.Canvas('c', { selection: true, preserveObjectStacking: true, backgroundColor: '#ffffff' });
         let nodeSeq = 1, ductSeq = 1, valveSeq = 1;
 
@@ -120,21 +101,10 @@
         const SNAP_DISTANCE = 60; 
         const STORAGE_KEY = 'malha_db_v2';
 
-        // Inicializa Wasm: O Emscripten precisa saber o novo caminho relativo
-        var Module = {
-            onRuntimeInitialized: function() {
-                if (window.onSolverReady) window.onSolverReady(Module);
-                setStatus("Motor de Simulação Pronto (WASM).");
-            },
-            locateFile: function(path) {
-                if(path.endsWith('.wasm')) {
-                    return '../static/wasm/' + path;
-                }
-                return path;
-            }
-        };
+        // O solver WASM é carregado sob procura pela página de Simulação
+        // (static/js/wrapper.js). O editor não precisa dele.
 
-        function setStatus(m) { 
+        function setStatus(m) {
             const el = document.getElementById('status-msg');
             if(el) el.innerText = m;
             console.log(`[Status] ${m}`);

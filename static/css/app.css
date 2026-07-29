@@ -1,0 +1,55 @@
+/* Layout compartilhado por todas as páginas do RotavaFlow.
+   Estilos específicos de cada página continuam no <style> da própria página. */
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Barra de menu */
+.menubar {
+    height: 35px;
+    flex-shrink: 0;
+    background-color: #333;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    user-select: none;
+    /* em telas estreitas os 8 links rolam na horizontal em vez de espremer */
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.menubar::-webkit-scrollbar { display: none; }
+
+.nav-link {
+    flex-shrink: 0;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #ccc;
+    padding: 0 15px;
+    font-size: 13px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+}
+.nav-link:hover { background-color: #444; color: white; }
+.nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
+
+.main-container {
+    flex-grow: 1;
+    display: flex;
+    position: relative;
+    height: calc(100vh - 35px);
+    overflow: auto;
+    flex-direction: column;
+    background: #eef2f5;
+}

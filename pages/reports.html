@@ -1,19 +1,16 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#333333">
     <title>RotavaFlow - Relatórios</title>
+    <link rel="icon" href="../static/icon.png" type="image/png">
+    <link rel="stylesheet" href="../static/css/app.css">
     <link rel="manifest" href="../static/manifest.json">
+    <script src="../static/js/app.js" defer></script>
     <script src="../static/js/chart.js"></script>
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
-        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
-        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
-        .nav-link:hover { background-color: #444; color: white; }
-        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
-        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
-
         /* Estilos específicos - Reports */
         .page-content { padding: 30px; max-width: 1200px; margin: 0 auto; width: 100%; }
         .report-controls { display: flex; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; }
@@ -26,7 +23,7 @@
 <body>
     <div class="menubar">
         <a href="../index.html" class="nav-link">Início</a>
-        <a href="canvas.html" class="nav-link">Editor P&ID</a>
+        <a href="canvas.html" class="nav-link">Editor P&amp;ID</a>
         <a href="nodes.html" class="nav-link">Nós</a>
         <a href="ducts.html" class="nav-link">Tubos</a>
         <a href="equipments.html" class="nav-link">Equipamentos</a>
@@ -69,12 +66,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('../sw.js'); });
-        }
-    </script>
 
     <script>
         const SPECIES = ['N2','CO2','C1','C2','iC3','nC3','iC4','nC4','C5','C6','C7','C8','C9','C10+'];

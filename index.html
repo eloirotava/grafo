@@ -1,21 +1,17 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#333333">
     <title>Início - RotavaFlow</title>
+    <link rel="icon" href="./static/icon.png" type="image/png">
+    <link rel="stylesheet" href="./static/css/app.css">
     <link rel="manifest" href="./static/manifest.json">
+    <script src="./static/js/app.js" defer></script>
     <script src="./static/js/fabric.min.js"></script>
     <script src="./static/js/chart.js"></script>
     <style>
-        /* Estilos do Layout */
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
-        .menubar { height: 35px; background-color: #333; display: flex; align-items: center; padding: 0 10px; user-select: none; }
-        .nav-link { text-decoration: none; color: #ccc; padding: 0 15px; font-size: 13px; height: 100%; display: flex; align-items: center; transition: all 0.2s; }
-        .nav-link:hover { background-color: #444; color: white; }
-        .nav-link.active { background-color: #0078d7; color: white; font-weight: bold; }
-        .main-container { flex-grow: 1; display: flex; position: relative; height: calc(100vh - 35px); overflow: auto; flex-direction: column; background: #eef2f5; }
-
         /* Estilos da Home */
         .hero { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; text-align: center; color: #444; background: radial-gradient(circle at center, #fff 0%, #f4f4f4 100%); }
         .hero h1 { font-size: 3em; font-weight: 300; margin-bottom: 10px; color: #222; }
@@ -28,7 +24,7 @@
 <body>
     <div class="menubar">
         <a href="#" class="nav-link active">Início</a>
-        <a href="./pages/canvas.html" class="nav-link">Editor P&ID</a>
+        <a href="./pages/canvas.html" class="nav-link">Editor P&amp;ID</a>
         <a href="./pages/nodes.html" class="nav-link">Nós</a>
         <a href="./pages/ducts.html" class="nav-link">Tubos</a>
         <a href="./pages/equipments.html" class="nav-link">Equipamentos</a>
@@ -47,15 +43,5 @@
         </div>
     </div>
 
-    <script>
-        // Registra o Service Worker na raiz
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('✅ Modo Offline Ativado! Scope:', reg.scope))
-                    .catch(err => console.log('❌ Falha no Service Worker:', err));
-            });
-        }
-    </script>
 </body>
 </html>
