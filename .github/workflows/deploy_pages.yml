@@ -31,8 +31,8 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Copiamos só o site para _site. Publicar a raiz do repo poria online o
-      # src/ em Rust, o Cargo.toml e os .rfm, que não fazem parte do site.
+      # Copiamos só o site para _site. Publicar a raiz do repo poria online
+      # também as malhas de exemplo .rfm, que não fazem parte do site.
       - name: Montar _site
         run: |
           mkdir -p _site

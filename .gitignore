@@ -1,32 +1,11 @@
-# --- RUST (O Essencial) ---
-# A pasta target é onde o compilador joga o binário e os objetos temporários.
-# NUNCA versione isso. É pesado e inútil para os outros.
-target/
-
-# Arquivos de backup gerados pelo Cargo (raro, mas acontece)
-Cargo.lock.bk
-*.rs.bk
-
-# --- BANCO DE DADOS ---
-# Você não quer mandar o seu banco de dados local com a malha salva pro git.
-*.sqlite
-*.sqlite3
-*.db
-*.db-shm
-*.db-wal
-
-# --- PYTHON (Legado) ---
-# Pra garantir que não suba lixo se você rodar o app.py antigo
-__pycache__/
-*.py[cod]
-venv/
-.venv/
-env/
-
 # --- SISTEMA / IDE ---
-# Lixo de Mac/Linux e configurações locais do VS Code
+# Lixo de Mac/Linux e configurações locais do editor
 .DS_Store
 .vscode/
 .idea/
 *.swp
 *~
+
+# --- FERRAMENTAS LOCAIS ---
+# Caso uses um servidor estático local para testar (npx serve, http-server, ...)
+node_modules/
