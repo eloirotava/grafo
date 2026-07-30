@@ -1,0 +1,72 @@
+name: Publicar site estático (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    # Só republica quando o site em si muda; mexer no Rust não dispara deploy.
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'pages/**'
+      - 'static/**'
+      - '.github/workflows/deploy_pages.yml'
+  workflow_dispatch: # Botão manual
+
+# Permissões mínimas exigidas pelo deploy oficial de Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Não deixa dois deploys correrem ao mesmo tempo; o último ganha.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Montar artefacto
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Copiamos só o site para _site. Publicar a raiz do repo poria online o
+      # src/ em Rust, o Cargo.toml e os .rfm, que não fazem parte do site.
+      - name: Montar _site
+        run: |
+          mkdir -p _site
+          cp index.html sw.js _site/
+          cp -r pages static _site/
+          # Impede o Jekyll de processar o conteúdo (ficheiros com _ à frente).
+          touch _site/.nojekyll
+
+      # O sw.js tem de ser servido da raiz, senão o escopo não cobre /pages/.
+      - name: Verificar estrutura
+        run: |
+          test -f _site/sw.js
+          test -f _site/index.html
+          test -f _site/static/wasm/fluxo.wasm
+          test -f _site/static/css/app.css
+          test -f _site/pages/canvas.html
+          echo "OK — $(find _site -type f | wc -l) ficheiros"
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Carregar artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Publicar
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy para o GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

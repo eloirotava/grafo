@@ -109,7 +109,10 @@
                             pressure: phys.pressure,
                             flow: phys.flow,
                             temperature: phys.temperature,
-                            volume: phys.volume
+                            volume: phys.volume,
+                            // não é editável aqui, mas é gravado pelo editor:
+                            // tem de sobreviver a uma edição nesta página
+                            elevation: phys.elevation
                         },
                         comp: compObj
                     };
@@ -118,79 +121,111 @@
             render();
         }
 
+        // A tabela é construída pelo DOM, não por interpolação de strings.
+        // Nomes e ids dos nós vêm de ficheiros .rfm abertos pelo utilizador:
+        // interpolados em HTML, um apóstrofo no nome partia os handlers e
+        // marcação no nome era executada como HTML.
+
+        function nameCell(node) {
+            const td = document.createElement('td');
+            const strong = document.createElement('strong');
+            strong.textContent = node.name;
+            td.appendChild(strong);
+            return td;
+        }
+
+        function typeCell(node) {
+            const td = document.createElement('td');
+            const select = document.createElement('select');
+            select.className = `type-select type-${node.type}`;
+            ['P', 'Q', 'I'].forEach(t => select.add(new Option(t, t, false, node.type === t)));
+            select.addEventListener('change', () => {
+                node.type = select.value;
+                saveToStorage();
+                render();
+            });
+            td.appendChild(select);
+            return td;
+        }
+
+        // O realce e a edição andam juntos: só o campo correspondente ao tipo
+        // do nó fica ativo (P -> pressão, Q -> vazão, I -> volume).
+        function numberCell(node, field, { enabled = true, highlight = null, step = '0.1' } = {}) {
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'input-cell' + (enabled && highlight ? ` ${highlight}` : '');
+            input.step = step;
+            input.value = node.physics[field] ?? '';
+            input.disabled = !enabled;
+            input.addEventListener('change', () => {
+                node.physics[field] = input.value === '' ? null : parseFloat(input.value);
+                saveToStorage();
+            });
+            td.appendChild(input);
+            return td;
+        }
+
+        function compositionCell(node) {
+            const td = document.createElement('td');
+            const container = document.createElement('div');
+            container.className = 'comp-container';
+
+            SPECIES.forEach(sp => {
+                const group = document.createElement('div');
+                group.style.cssText = 'font-size:10px; display:flex; flex-direction:column; min-width:35px;';
+
+                const label = document.createElement('span');
+                label.style.color = '#888';
+                label.textContent = sp;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = node.comp[sp] ?? '';
+                input.style.cssText = 'width:100%; border:1px solid #ddd; padding:2px;';
+                input.addEventListener('change', () => {
+                    if (input.value === '') delete node.comp[sp];
+                    else node.comp[sp] = parseFloat(input.value);
+                    saveToStorage();
+                });
+
+                group.append(label, input);
+                container.appendChild(group);
+            });
+
+            td.appendChild(container);
+            return td;
+        }
+
         function render() {
             const tbody = document.getElementById('nodes-body');
             tbody.innerHTML = '';
-            
+
             if (globalNodes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#999;">Nenhum nó encontrado.</td></tr>';
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 7;
+                td.style.cssText = 'text-align:center; padding:30px; color:#999;';
+                td.textContent = 'Nenhum nó encontrado.';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
                 return;
             }
 
-            globalNodes.forEach((n) => {
+            globalNodes.forEach(n => {
                 const tr = document.createElement('tr');
-                const isP = n.type === 'P';
-                const isQ = n.type === 'Q';
-                const isI = n.type === 'I';
-
-                const inputs = `
-                    <td><input type="number" class="input-cell ${isP?'highlight-p':''}" value="${n.physics.pressure ?? ''}" step="0.1" ${!isP?'disabled':''} onchange="updatePhys('${n.id}', 'pressure', this.value)"></td>
-                    <td><input type="number" class="input-cell ${isQ?'highlight-q':''}" value="${n.physics.flow ?? ''}" step="0.1" ${!isQ?'disabled':''} onchange="updatePhys('${n.id}', 'flow', this.value)"></td>
-                    <td><input type="number" class="input-cell" value="${n.physics.temperature ?? ''}" step="1" onchange="updatePhys('${n.id}', 'temperature', this.value)"></td>
-                    <td><input type="number" class="input-cell ${isI?'highlight-i':''}" value="${n.physics.volume ?? ''}" step="0.1" ${!isI?'disabled':''} onchange="updatePhys('${n.id}', 'volume', this.value)"></td>
-                `;
-
-                let compInputs = '<div class="comp-container">';
-                SPECIES.forEach(sp => {
-                    const val = n.comp[sp] ?? '';
-                    compInputs += `<div style="font-size:10px; display:flex; flex-direction:column; min-width:35px;">
-                        <span style="color:#888">${sp}</span>
-                        <input type="text" value="${val}" style="width:100%; border:1px solid #ddd; padding:2px;" onchange="updateComp('${n.id}', '${sp}', this.value)">
-                    </div>`;
-                });
-                compInputs += '</div>';
-
-                tr.innerHTML = `
-                    <td><strong>${n.name}</strong></td>
-                    <td>
-                        <select class="type-select type-${n.type}" onchange="updateType('${n.id}', this.value)">
-                            <option value="P" ${n.type==='P'?'selected':''}>P</option>
-                            <option value="Q" ${n.type==='Q'?'selected':''}>Q</option>
-                            <option value="I" ${n.type==='I'?'selected':''}>I</option>
-                        </select>
-                    </td>
-                    ${inputs}
-                    <td>${compInputs}</td>
-                `;
+                tr.append(
+                    nameCell(n),
+                    typeCell(n),
+                    numberCell(n, 'pressure',    { enabled: n.type === 'P', highlight: 'highlight-p' }),
+                    numberCell(n, 'flow',        { enabled: n.type === 'Q', highlight: 'highlight-q' }),
+                    numberCell(n, 'temperature', { step: '1' }),
+                    numberCell(n, 'volume',      { enabled: n.type === 'I', highlight: 'highlight-i' }),
+                    compositionCell(n)
+                );
                 tbody.appendChild(tr);
             });
         }
-
-        window.updateType = function(id, newType) {
-            const node = globalNodes.find(n => String(n.id) === String(id));
-            if(node) {
-                node.type = newType;
-                saveToStorage();
-                render(); 
-            }
-        };
-
-        window.updatePhys = function(id, field, value) {
-            const node = globalNodes.find(n => String(n.id) === String(id));
-            if(node) {
-                node.physics[field] = value === '' ? null : parseFloat(value);
-                saveToStorage();
-            }
-        };
-
-        window.updateComp = function(id, compName, value) {
-            const node = globalNodes.find(n => String(n.id) === String(id));
-            if(node) {
-                if(value === '') delete node.comp[compName];
-                else node.comp[compName] = parseFloat(value);
-                saveToStorage();
-            }
-        };
 
         function saveToStorage() {
             globalNodes.forEach(gn => {
@@ -208,7 +243,8 @@
                 pressure: gn.physics.pressure,
                 flow: gn.physics.flow,
                 temperature: gn.physics.temperature,
-                volume: gn.physics.volume
+                volume: gn.physics.volume,
+                elevation: gn.physics.elevation
             }));
 
             globalData.node_composition = [];
